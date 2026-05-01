@@ -15,7 +15,12 @@
       "Bash(git --version)",
       "Bash(git init *)",
       "Bash(git config *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git remote *)",
+      "Bash(git push *)",
+      "Bash(cmdkey /list)",
+      "Bash(git credential-manager *)"
     ]
   }
 }

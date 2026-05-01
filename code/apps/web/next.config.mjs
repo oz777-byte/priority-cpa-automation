@@ -5,6 +5,9 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const monorepoEnv = resolve(__dirname, '../../.env.local');
 
+// Local-dev convenience: read code/.env.local into envVars so Next.js
+// (which doesn't traverse to parent .env files) sees the values.
+// On Vercel, this file does not exist; Vercel injects vars into process.env directly.
 const envVars = {};
 try {
   const content = readFileSync(monorepoEnv, 'utf-8');
@@ -16,8 +19,16 @@ try {
     envVars[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
   }
 } catch {
-  // .env.local missing; the app will throw a clear error on first env read
+  // .env.local missing (Vercel) — fall back to Vercel-injected process.env
 }
+
+function pick(key) {
+  return envVars[key] ?? process.env[key] ?? '';
+}
+
+const SUPABASE_URL = pick('SUPABASE_URL');
+const SUPABASE_PUBLISHABLE_KEY = pick('SUPABASE_PUBLISHABLE_KEY');
+const SUPABASE_SECRET_KEY = pick('SUPABASE_SECRET_KEY');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -30,11 +41,11 @@ const nextConfig = {
     '@priority-cpa/movein-generator',
   ],
   env: {
-    SUPABASE_URL: envVars.SUPABASE_URL,
-    SUPABASE_PUBLISHABLE_KEY: envVars.SUPABASE_PUBLISHABLE_KEY,
-    SUPABASE_SECRET_KEY: envVars.SUPABASE_SECRET_KEY,
-    NEXT_PUBLIC_SUPABASE_URL: envVars.SUPABASE_URL,
-    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: envVars.SUPABASE_PUBLISHABLE_KEY,
+    SUPABASE_URL,
+    SUPABASE_PUBLISHABLE_KEY,
+    SUPABASE_SECRET_KEY,
+    NEXT_PUBLIC_SUPABASE_URL: SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: SUPABASE_PUBLISHABLE_KEY,
   },
   webpack: (config) => {
     // Skill packages are TypeScript ESM with .js imports (the strict-ESM

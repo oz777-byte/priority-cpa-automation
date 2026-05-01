@@ -12,7 +12,8 @@
   "scripts": {
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "verify:supabase": "node --env-file=.env.local --experimental-strip-types scripts/verify-supabase.ts"
+    "verify:supabase": "node --env-file=.env.local --experimental-strip-types scripts/verify-supabase.ts",
+    "reset-password": "node --env-file=.env.local --experimental-strip-types scripts/reset-password.ts"
   },
   "engines": {
     "node": ">=20"
