@@ -1,0 +1,25 @@
+{
+  "name": "@priority-cpa/audit-logger",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Append-only audit trail interface + in-memory implementation. DB-backed implementation arrives with the Supabase migration.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@priority-cpa/db": "*",
+    "@supabase/supabase-js": "^2.46.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2"
+  }
+}

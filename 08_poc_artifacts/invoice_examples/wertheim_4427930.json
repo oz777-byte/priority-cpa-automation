@@ -1,0 +1,73 @@
+{
+  "source_file": "02_invoices_raw/wertheim_4427930.pdf",
+  "extraction_method": "manual_from_pdf_text",
+  "supplier": {
+    "name": "שיווק והספקה וירטהיים בע\"מ",
+    "tax_id": "510847064",
+    "internal_code_priority": "200087",
+    "internal_description_priority": "שיווק והספקה וירטהיים בע\"מ- ספק",
+    "contact_email": "nadav@wirtheim.com",
+    "phone": "04-8726150",
+    "address": "שד' ההסתדרות 172, חיפה 2611902",
+    "source_erp": "SAP Business One"
+  },
+  "customer": {
+    "name": "טארי פתרונות מעוצבים בע\"מ",
+    "tax_id": "517049003",
+    "customer_code_at_supplier": "28239",
+    "contact": "משה 052-2734702"
+  },
+  "invoice": {
+    "document_type": "חשבונית מס",
+    "number": "4427930",
+    "date": "2026-02-10",
+    "date_display": "10/02/2026",
+    "time": "11:18",
+    "allocation_number": "1I4427930",
+    "payment_terms": "שוטף+60",
+    "payment_due": "2026-02-10",
+    "currency": "ILS"
+  },
+  "line_items": [
+    {
+      "sku": "830200070025",
+      "description": "לוח C-POM שחור 25 ממ אורך 1000 ממ', רוחב 70 ממ', 2 יחידות",
+      "uom": "מ\"ר",
+      "qty": 0.14,
+      "unit_price": 95.00,
+      "discount_pct": 0.00,
+      "line_total": 190.00
+    },
+    {
+      "sku": "504400200010",
+      "description": "גלגל אוקולון 8\" פלטה קבוע",
+      "uom": "יח",
+      "qty": 4.00,
+      "unit_price": 86.70,
+      "discount_pct": 15.00,
+      "line_total": 294.78
+    }
+  ],
+  "totals": {
+    "subtotal": 484.78,
+    "vat_rate": 18.00,
+    "vat_amount": 87.25,
+    "total": 572.00
+  },
+  "math_check": {
+    "subtotal_plus_vat": 572.03,
+    "displayed_total": 572.00,
+    "rounding_diff": -0.03,
+    "within_tolerance_0.05": true
+  },
+  "payment_details": {
+    "bank": "הפועלים",
+    "bank_code": "12",
+    "branch": "729",
+    "account": "272724"
+  },
+  "notes": [
+    "ה-allocation number '1I4427930' הוא מספר הקצאה שמופיע בחשבונית - מתאים לרגולציית 2024+",
+    "סטייה של 0.03 ₪ בין subtotal+vat לטוטאל - בתוך tolerance 0.05"
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "source_file": "02_invoices_raw/tzarfati_114390.pdf",
+  "extraction_method": "manual_from_pdf_text",
+  "supplier": {
+    "name": "יצחק מ צרפתי ובנו בע\"מ",
+    "tax_id": "510044969",
+    "internal_code_priority": "200037",
+    "internal_description_priority": "יצחק מ.צרפתי ובנו",
+    "phone": "03-6540424",
+    "fax": "03-6540602",
+    "address": "המלאכה 29, ת.ד. 1742, חולון 5811701",
+    "source_erp": "חשבשבת ERP"
+  },
+  "customer": {
+    "name": "טארי פתרונות מעוצבים בע\"מ",
+    "tax_id": "517049003",
+    "customer_key_at_supplier": "טארי בע\"מ",
+    "customer_id_at_supplier": "347813",
+    "address": "שבזי 2, פרדס חנה"
+  },
+  "invoice": {
+    "document_type": "חשבונית מס",
+    "number": "114390",
+    "date": "2026-03-05",
+    "date_display": "05/03/2026",
+    "time": "14:39",
+    "allocation_number": null,
+    "payment_terms": "שוטף",
+    "payment_due": "2026-03-05",
+    "currency": "ILS",
+    "ordered_by": "משה"
+  },
+  "line_items": [
+    {
+      "sku": "HP 2M5 UO-U2",
+      "description": "2M5 UO-U2 HP W A-(PU)",
+      "qty": 1.00,
+      "length": 9.80,
+      "width": 2.00,
+      "total_qty": 19.60,
+      "unit_price": 280.00,
+      "discount_pct": 0.00,
+      "line_total": 5488.00,
+      "delivery_ref": "66121"
+    }
+  ],
+  "totals": {
+    "line_sum": 5488.00,
+    "discount_amount": -0.14,
+    "subtotal": 5488.14,
+    "vat_rate": 18.00,
+    "vat_amount": 987.86,
+    "total": 6476.00
+  },
+  "math_check": {
+    "subtotal_plus_vat": 6476.00,
+    "displayed_total": 6476.00,
+    "rounding_diff": 0.00,
+    "within_tolerance_0.05": true,
+    "note": "תצוגת הנחה -0.14 (שלילית) = למעשה תוספת עיגול של 0.14 להתאמה לטוטאל עגול 6476. subtotal+VAT מאוזן בדיוק."
+  },
+  "notes": [
+    "אין מספר הקצאה נפרד על החשבונית - לבדוק אם חוצה רף רגולטורי (סכום מעל רף מחייב)",
+    "הספק משתמש בחשבשבת ERP - מבנה PDF שונה מוירטהיים"
+  ]
+}

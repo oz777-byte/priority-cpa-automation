@@ -1,0 +1,32 @@
+# Dependencies
+**/node_modules/
+
+# Build outputs
+**/.next/
+**/dist/
+**/.turbo/
+
+# Env / secrets — never commit
+**/.env
+**/.env.local
+**/.env.*.local
+
+# OS / editors
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Testing
+**/coverage/
+
+# TypeScript
+*.tsbuildinfo
+
+# Next.js generated
+**/next-env.d.ts

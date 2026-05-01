@@ -1,0 +1,27 @@
+{
+  "name": "priority-cpa-automation",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SaaS for Israeli CPAs that automates supplier invoice entry into Priority via MOVEIN.DAT",
+  "type": "module",
+  "workspaces": [
+    "packages/shared/*",
+    "packages/skills/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "verify:supabase": "node --env-file=.env.local --experimental-strip-types scripts/verify-supabase.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.46.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}
