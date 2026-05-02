@@ -17,6 +17,7 @@
     "@priority-cpa/je-constructor": "*",
     "@priority-cpa/je-validator": "*",
     "@priority-cpa/movein-generator": "*",
+    "@priority-cpa/ocr-azure": "*",
     "@priority-cpa/scenario-detector": "*",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.46.1",
