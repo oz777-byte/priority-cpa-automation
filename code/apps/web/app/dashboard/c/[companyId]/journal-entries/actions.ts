@@ -31,6 +31,29 @@ export async function ensureDraftJEsForCompany(
   if (!company) return { created: 0 };
   const settings = (company.settings ?? {}) as CompanySettings;
 
+  // Pull the supplier master once so per-supplier defaults can override
+  // company-level defaults (matched by tax_id, then by internal_code).
+  const { data: supplierRows } = await admin
+    .from('suppliers')
+    .select('internal_code, tax_id, default_expense_account, default_cost_center')
+    .eq('company_id', companyId);
+  const supplierByTaxId = new Map<
+    string,
+    { default_expense_account: string | null; default_cost_center: string | null }
+  >();
+  const supplierByCode = new Map<
+    string,
+    { default_expense_account: string | null; default_cost_center: string | null }
+  >();
+  for (const s of supplierRows ?? []) {
+    const v = {
+      default_expense_account: (s.default_expense_account as string | null) ?? null,
+      default_cost_center: (s.default_cost_center as string | null) ?? null,
+    };
+    if (s.tax_id) supplierByTaxId.set(s.tax_id as string, v);
+    if (s.internal_code) supplierByCode.set(s.internal_code as string, v);
+  }
+
   const { data: orphans } = await admin
     .from('invoices_inbox')
     .select('id, canonical')
@@ -52,7 +75,29 @@ export async function ensureDraftJEsForCompany(
 
     // Build per-invoice config so paymentAccount / withholdingAccount /
     // nonDeductibleAccount are resolved against the invoice's payment_method.
-    const config = constructorConfigFor(settings, canonical);
+    let config = constructorConfigFor(settings, canonical);
+
+    // Per-supplier override: if the master has a default expense account or
+    // cost center for this supplier, prefer it over the company default.
+    const supplierMatch =
+      (canonical.supplier.tax_id
+        ? supplierByTaxId.get(canonical.supplier.tax_id)
+        : undefined) ??
+      supplierByCode.get(canonical.supplier.internal_code_priority);
+    if (supplierMatch) {
+      if (supplierMatch.default_expense_account) {
+        config = { ...config, expenseAccount: supplierMatch.default_expense_account };
+      }
+      // cost_center on the invoice header takes precedence; only fall back
+      // to supplier default when the invoice doesn't carry one.
+      if (
+        supplierMatch.default_cost_center &&
+        !canonical.invoice.cost_center
+      ) {
+        canonical.invoice.cost_center = supplierMatch.default_cost_center;
+      }
+    }
+
     const result = constructJE(canonical, config);
 
     // For now: each detected JERecord is stored as a separate journal_entries

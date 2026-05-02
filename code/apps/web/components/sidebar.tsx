@@ -45,7 +45,7 @@ const COMPANY_TABS: Tab[] = [
   { slug: '/invoices', label: 'חשבוניות', icon: Inbox },
   { slug: '/journal-entries', label: 'פקודות יומן', icon: FileEdit },
   { slug: '/bank-reconciliation', label: 'התאמות בנק ואשראי', icon: Wallet, comingSoon: true },
-  { slug: '/suppliers', label: 'ספקים', icon: Users, comingSoon: true },
+  { slug: '/suppliers', label: 'ספקים', icon: Users },
   { slug: '/account-mapping', label: 'מיפוי חשבונות', icon: GitBranch, comingSoon: true },
   { slug: '/exports', label: 'היסטוריית ייצוא', icon: History },
   { slug: '/reports', label: 'דוחות', icon: BarChart3, comingSoon: true },

@@ -1,9 +1,20 @@
 import { Users } from 'lucide-react';
-import { ComingSoon } from '@/components/coming-soon';
 import { requireUser } from '@/lib/auth';
 import { loadCompanyForUser } from '@/lib/company-context';
+import { getAdminClient } from '@/lib/supabase/admin';
+import { SuppliersPanel, type SupplierRow } from './suppliers-panel';
 
 export const dynamic = 'force-dynamic';
+
+interface DBSupplier {
+  id: string;
+  name: string;
+  internal_code: string;
+  tax_id: string | null;
+  default_expense_account: string | null;
+  default_cost_center: string | null;
+  payment_terms: string | null;
+}
 
 export default async function SuppliersPage({
   params,
@@ -11,21 +22,62 @@ export default async function SuppliersPage({
   params: { companyId: string };
 }) {
   const me = await requireUser();
-  await loadCompanyForUser(me.id, me.email, params.companyId);
+  const company = await loadCompanyForUser(me.id, me.email, params.companyId);
+  const admin = getAdminClient();
+
+  const { data: suppliers } = await admin
+    .from('suppliers')
+    .select(
+      'id, name, internal_code, tax_id, default_expense_account, default_cost_center, payment_terms',
+    )
+    .eq('company_id', company.id)
+    .order('name', { ascending: true });
+
+  const supplierList = (suppliers ?? []) as DBSupplier[];
+
+  // Count invoices per supplier (matched by canonical.supplier.tax_id).
+  // We do this in one query per company and bucket the results.
+  const taxIds = supplierList.map((s) => s.tax_id).filter((v): v is string => !!v);
+  const invoiceCountByTaxId = new Map<string, number>();
+  if (taxIds.length > 0) {
+    const { data: invs } = await admin
+      .from('invoices_inbox')
+      .select('canonical')
+      .eq('company_id', company.id);
+    for (const inv of invs ?? []) {
+      const tx = ((inv.canonical ?? {}) as { supplier?: { tax_id?: string } })
+        .supplier?.tax_id;
+      if (tx && taxIds.includes(tx)) {
+        invoiceCountByTaxId.set(tx, (invoiceCountByTaxId.get(tx) ?? 0) + 1);
+      }
+    }
+  }
+
+  const rows: SupplierRow[] = supplierList.map((s) => ({
+    id: s.id,
+    name: s.name,
+    internal_code: s.internal_code,
+    tax_id: s.tax_id,
+    default_expense_account: s.default_expense_account,
+    default_cost_center: s.default_cost_center,
+    payment_terms: s.payment_terms,
+    invoiceCount: s.tax_id ? invoiceCountByTaxId.get(s.tax_id) ?? 0 : 0,
+  }));
 
   return (
-    <ComingSoon
-      icon={Users}
-      title="ניהול ספקים"
-      description="מאסטר הספקים של החברה: הוספה, עריכה, מיזוג כפולים, ניהול aliases ללמידה אוטומטית של חתימות חשבוניות חדשות."
-      features={[
-        'ייבוא מאסטר ספקים מפריוריטי בלחיצה (דרך API או xlsx).',
-        'התאמה אוטומטית של ספק חדש מהחשבונית למאסטר (5-layer cascade: tax_id → alias → fuzzy → AI).',
-        'ניהול aliases — שמות תרגומים שהמערכת לומדת מהאישורים שלך.',
-        'איתור כפילויות (אותו ע.מ עם 2 רשומות נפרדות) ומיזוג בלחיצה.',
-        'הגדרת חשבון ברירת מחדל לכל ספק (חשבון הוצאה, מרכז עלות).',
-      ]}
-      eta="Phase 2 (כחודש)"
-    />
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-lg font-semibold text-ink-900 flex items-center gap-2">
+          <Users size={18} className="text-brand-500" />
+          ניהול ספקים
+        </h2>
+        <p className="text-sm text-ink-600 mt-0.5">
+          מאסטר הספקים של {company.name}. כל ספק שתזין יזוהה אוטומטית בחשבוניות
+          עתידיות (לפי ע.מ או קוד), עם החשבון ומרכז העלות שהגדרת לו.
+        </p>
+      </div>
+
+      <SuppliersPanel rows={rows} companyId={company.id} />
+    </div>
   );
 }
