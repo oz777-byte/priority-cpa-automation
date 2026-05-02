@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Download, Inbox } from 'lucide-react';
+import { Download, Inbox, History } from 'lucide-react';
 import { requireUser } from '@/lib/auth';
 import { loadCompanyForUser } from '@/lib/company-context';
 import { getAdminClient } from '@/lib/supabase/admin';
@@ -74,27 +74,50 @@ export default async function CompanyJEsPage({
   const editable = allJes.filter((x) => x.je.status !== 'exported');
   const exported = allJes.filter((x) => x.je.status === 'exported');
 
+  // Find the most-recent batch for this company so we can offer a quick
+  // re-download even when there are no editable JEs left to export.
+  const { data: lastBatchRow } = await admin
+    .from('movein_batches')
+    .select('id, batch_number, exported_at')
+    .eq('company_id', company.id)
+    .order('exported_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   return (
     <div className="space-y-5">
-      <div className="flex items-end justify-between">
+      <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-lg font-semibold text-ink-900">פקודות יומן</h2>
           <p className="text-sm text-ink-600 mt-0.5">
             ערוך כל שורה ישירות (חשבון, סכום) — שינויים נשמרים בלחיצה מחוץ
-            לשדה. כשהכל מוכן — הפק קובץ MOVEIN.DAT.
+            לשדה. כשהכל מוכן — הפק קובץ MOVEIN.
           </p>
         </div>
-        {editable.length > 0 && (
-          <form action={`/api/movein?companyId=${company.id}`} method="post">
-            <button
-              type="submit"
-              className="px-5 py-2.5 bg-accent-600 text-white rounded-lg text-sm font-medium hover:bg-accent-500 flex items-center gap-2 shadow-sm"
+        <div className="flex items-center gap-2">
+          {lastBatchRow && (
+            <a
+              href={`/api/movein?companyId=${company.id}&batch=${lastBatchRow.id}`}
+              download
+              className="px-3 py-2 text-sm text-accent-600 border border-accent-200 hover:bg-accent-50 rounded-lg flex items-center gap-2"
+              title={`אצווה ${lastBatchRow.batch_number ?? ''}`}
             >
-              <Download size={16} />
-              הפק MOVEIN.DAT ({editable.length})
-            </button>
-          </form>
-        )}
+              <History size={14} />
+              הורד אצווה אחרונה
+            </a>
+          )}
+          {editable.length > 0 && (
+            <form action={`/api/movein?companyId=${company.id}`} method="post">
+              <button
+                type="submit"
+                className="px-5 py-2.5 bg-accent-600 text-white rounded-lg text-sm font-medium hover:bg-accent-500 flex items-center gap-2 shadow-sm"
+              >
+                <Download size={16} />
+                הפק MOVEIN ({editable.length})
+              </button>
+            </form>
+          )}
+        </div>
       </div>
 
       {editable.length === 0 && exported.length === 0 ? (

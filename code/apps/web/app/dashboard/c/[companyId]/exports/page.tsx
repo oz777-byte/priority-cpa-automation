@@ -39,7 +39,8 @@ export default async function ExportsHistoryPage({
           היסטוריית ייצוא
         </h2>
         <p className="text-sm text-ink-600 mt-0.5">
-          כל קובצי MOVEIN.DAT שהופקו עבור {company.name}, בסדר כרונולוגי הפוך.
+          כל קובצי MOVEIN שהופקו עבור {company.name}, בסדר כרונולוגי הפוך.
+          לחץ "הורד" כדי להפיק את הקובץ מחדש מאותם JE-ים.
         </p>
       </div>
 
@@ -56,13 +57,20 @@ export default async function ExportsHistoryPage({
                 <th className="text-right p-3 font-medium">מס׳ אצווה</th>
                 <th className="text-right p-3 font-medium">תאריך</th>
                 <th className="text-right p-3 font-medium">רשומות</th>
+                <th className="text-right p-3 font-medium">פורמט</th>
                 <th className="text-right p-3 font-medium">סטטוס בפריוריטי</th>
+                <th className="text-right p-3 font-medium">הורדה</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((b) => {
-                const recordCount =
-                  ((b.scenario_breakdown as { records?: number } | null)?.records) ?? 0;
+                const breakdown = (b.scenario_breakdown ?? {}) as {
+                  records?: number;
+                  format?: string;
+                };
+                const recordCount = breakdown.records ?? 0;
+                const format = (breakdown.format ?? '180') as '180' | 'flexible';
+                const downloadUrl = `/api/movein?companyId=${company.id}&batch=${b.id}`;
                 return (
                   <tr key={b.id} className="border-b border-ink-100 last:border-0">
                     <td className="p-3 font-mono text-ink-900" dir="ltr">
@@ -73,7 +81,20 @@ export default async function ExportsHistoryPage({
                     </td>
                     <td className="p-3 text-ink-900 tabular-nums">{recordCount}</td>
                     <td className="p-3">
+                      <FormatPill format={format} />
+                    </td>
+                    <td className="p-3">
                       <StatusPill status={b.priority_load_status} />
+                    </td>
+                    <td className="p-3">
+                      <a
+                        href={downloadUrl}
+                        download
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-accent-600 text-white rounded-md text-xs font-medium hover:bg-accent-500"
+                      >
+                        <Download size={13} />
+                        הורד
+                      </a>
                     </td>
                   </tr>
                 );
@@ -83,9 +104,9 @@ export default async function ExportsHistoryPage({
         </div>
       )}
 
-      <div className="text-xs text-ink-400">
-        כל אצווה נשמרת ב-audit log עם כל ה-JE-ים שנכללו בה. הקובץ עצמו לא נשמר —
-        אם צריך להוריד שוב, אפשר להפיק אצווה חדשה מ-JE-ים שלא יוצאו.
+      <div className="text-xs text-ink-400 leading-relaxed">
+        ההורדה מפיקה מחדש את הקובץ מה-JE-ים השמורים — הקבצים עצמם לא נשמרים על
+        השרת. כל פעולה נרשמת ב-audit log.
       </div>
     </div>
   );
@@ -101,6 +122,21 @@ function StatusPill({ status }: { status: string }) {
   const c = config[status] ?? config.pending!;
   return (
     <span className={`inline-block px-2 py-1 rounded text-xs ${c.bg} ${c.text}`}>
+      {c.label}
+    </span>
+  );
+}
+
+function FormatPill({ format }: { format: '180' | 'flexible' }) {
+  const c =
+    format === 'flexible'
+      ? { bg: 'bg-purple-100', text: 'text-purple-800', label: 'FLEXIBLE' }
+      : { bg: 'bg-ink-100', text: 'text-ink-700', label: '180' };
+  return (
+    <span
+      className={`inline-block px-2 py-0.5 rounded text-[10px] font-medium font-mono ${c.bg} ${c.text}`}
+      dir="ltr"
+    >
       {c.label}
     </span>
   );
