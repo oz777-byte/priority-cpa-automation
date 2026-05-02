@@ -2,6 +2,7 @@ import { requireUser } from '@/lib/auth';
 import { getLatestRatesPerCurrency } from '@/lib/fx-rates';
 import { ChangePasswordForm } from './change-password-form';
 import { FxRatesPanel } from './fx-rates-panel';
+import { MfaPanel } from './mfa-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +19,7 @@ export default async function SettingsPage() {
         </p>
       </header>
       <ChangePasswordForm />
+      <MfaPanel />
       <FxRatesPanel initialRates={rates} />
     </div>
   );

@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 const PROTECTED_PREFIX = '/dashboard';
 const LOGIN_PATH = '/login';
+const MFA_PATH = '/login/mfa';
 
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next({
@@ -33,15 +34,43 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  const isProtected = request.nextUrl.pathname.startsWith(PROTECTED_PREFIX);
+  const path = request.nextUrl.pathname;
+  const isProtected = path.startsWith(PROTECTED_PREFIX);
+  const isLogin = path === LOGIN_PATH;
+  const isMfaPage = path === MFA_PATH;
+
   if (isProtected && !user) {
     const redirectTo = new URL(LOGIN_PATH, request.url);
-    redirectTo.searchParams.set('next', request.nextUrl.pathname);
+    redirectTo.searchParams.set('next', path);
     return NextResponse.redirect(redirectTo);
   }
 
-  // Logged-in users hitting /login go to dashboard
-  if (request.nextUrl.pathname === LOGIN_PATH && user) {
+  // If user is logged in, check whether MFA challenge is required.
+  // currentLevel='aal1' & nextLevel='aal2' means the user has MFA
+  // enrolled but hasn't satisfied the second factor in this session.
+  if (user && (isProtected || isLogin)) {
+    const { data: aalData } =
+      await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    const needsMfa =
+      aalData?.currentLevel === 'aal1' && aalData?.nextLevel === 'aal2';
+    if (needsMfa && !isMfaPage) {
+      const redirectTo = new URL(MFA_PATH, request.url);
+      if (isProtected) redirectTo.searchParams.set('next', path);
+      return NextResponse.redirect(redirectTo);
+    }
+  }
+
+  // Already-AAL2 user hitting the MFA page → bounce to dashboard.
+  if (user && isMfaPage) {
+    const { data: aalData } =
+      await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aalData?.currentLevel === 'aal2') {
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+  }
+
+  // Logged-in users hitting /login go to dashboard.
+  if (isLogin && user) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
