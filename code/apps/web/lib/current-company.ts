@@ -19,6 +19,7 @@ export interface CompanyRow {
   priority_version: string | null;
   status: 'active' | 'paused' | 'archived';
   settings: Record<string, unknown>;
+  inbox_token: string | null;
   created_at: string;
 }
 
@@ -27,7 +28,7 @@ export async function listCompaniesForUser(userId: string, email: string): Promi
   const admin = getAdminClient();
   const { data, error } = await admin
     .from('companies')
-    .select('id, firm_id, name, tax_id, priority_version, status, settings, created_at')
+    .select('id, firm_id, name, tax_id, priority_version, status, settings, inbox_token, created_at')
     .eq('firm_id', firmId)
     .order('created_at', { ascending: true });
   if (error) throw new Error(error.message);

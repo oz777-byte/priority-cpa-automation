@@ -1,8 +1,9 @@
-import { Settings, Banknote, Percent, AlertCircle } from 'lucide-react';
+import { Settings, Banknote, Percent, AlertCircle, Mail } from 'lucide-react';
 import { requireUser } from '@/lib/auth';
 import { loadCompanyForUser } from '@/lib/company-context';
 import { CompanySettings, DEFAULT_SETTINGS } from '@/lib/company-config';
 import { updateCompanySettingsAction } from './actions';
+import { InboxAddressBox } from './inbox-address-box';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +15,11 @@ export default async function CompanySettingsPage({
   const me = await requireUser();
   const company = await loadCompanyForUser(me.id, me.email, params.companyId);
   const settings = (company.settings ?? {}) as CompanySettings;
+
+  const inboxDomain = process.env.INBOUND_EMAIL_DOMAIN ?? 'inbox.app.oz-nihul.com';
+  const inboxAddress = company.inbox_token
+    ? `${company.inbox_token}@${inboxDomain}`
+    : null;
 
   async function submitForm(formData: FormData): Promise<void> {
     'use server';
@@ -52,6 +58,32 @@ export default async function CompanySettingsPage({
           לעריכת שם/ע.מ — ניהול חברות ← פתיחת חברה
         </div>
       </section>
+
+      {inboxAddress && (
+        <section className="bg-white border border-ink-200 rounded-xl p-5 space-y-3">
+          <div className="flex items-start gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-accent-500/10 text-accent-600 flex items-center justify-center flex-shrink-0">
+              <Mail size={15} />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-ink-900">
+                כתובת לקליטת חשבוניות במייל
+              </h3>
+              <p className="text-xs text-ink-600 mt-0.5 leading-relaxed">
+                העבר את הכתובת הזו לספקים, או הגדר filter ב-Gmail שיעביר אליה
+                כל מייל שמכיל "חשבונית". כל PDF במייל הנכנס יזוהה אוטומטית
+                (OCR) ויהפוך לטיוטת חשבונית.
+              </p>
+            </div>
+          </div>
+          <InboxAddressBox address={inboxAddress} />
+          <div className="text-[11px] text-ink-400 leading-relaxed">
+            הקליטה דורשת חיבור של ספק מייל (SendGrid Inbound Parse / Postmark /
+            Mailgun) לדומיין <code dir="ltr">{inboxDomain}</code>. עד שהחיבור
+            יוגדר, הכתובת מוצגת אך לא תקבל מיילים בפועל.
+          </div>
+        </section>
+      )}
 
       <form action={submitForm} className="space-y-5">
         <input type="hidden" name="companyId" value={company.id} />
