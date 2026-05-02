@@ -177,7 +177,7 @@ export async function updateJEHeaderAction(formData: FormData): Promise<{ ok: bo
     payload: { fields: Object.keys(update), edited_by: me.email },
   });
 
-  revalidatePath('/dashboard/journal-entries');
+  revalidatePath('/dashboard', 'layout');
   return { ok: true };
 }
 
@@ -245,7 +245,7 @@ export async function updateLineAction(formData: FormData): Promise<{ ok: boolea
     payload: { fields: Object.keys(update), edited_by: me.email },
   });
 
-  revalidatePath('/dashboard/journal-entries');
+  revalidatePath('/dashboard', 'layout');
   return { ok: true };
 }
 
@@ -306,7 +306,7 @@ export async function addLineAction(formData: FormData): Promise<{ ok: boolean; 
     payload: { account: parsed.data.account, by: me.email },
   });
 
-  revalidatePath('/dashboard/journal-entries');
+  revalidatePath('/dashboard', 'layout');
   return { ok: true };
 }
 
@@ -343,6 +343,6 @@ export async function removeLineAction(formData: FormData): Promise<{ ok: boolea
     payload: { by: me.email },
   });
 
-  revalidatePath('/dashboard/journal-entries');
+  revalidatePath('/dashboard', 'layout');
   return { ok: true };
 }

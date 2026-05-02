@@ -84,8 +84,7 @@ export async function createCompanyAction(formData: FormData): Promise<CreateCom
   // Auto-select newly created company
   setCompanyCookie(data.id as string);
 
-  revalidatePath('/dashboard/companies');
-  revalidatePath('/dashboard');
+  revalidatePath('/dashboard', 'layout');
   return { ok: true, companyId: data.id as string };
 }
 
@@ -220,7 +219,6 @@ export async function seedPocInvoicesAction(formData: FormData): Promise<{ ok: b
     created++;
   }
 
-  revalidatePath('/dashboard/invoices');
-  revalidatePath('/dashboard');
+  revalidatePath('/dashboard', 'layout');
   return { ok: true, created };
 }
