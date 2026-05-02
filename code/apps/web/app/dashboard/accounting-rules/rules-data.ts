@@ -213,7 +213,7 @@ export const RULES: AccountingRule[] = [
     code: 'MULTI_EXPENSE',
     title: 'חשבונית מולטי-קטגוריה',
     icon: Layers,
-    status: 'coming-soon',
+    status: 'auto-with-warning',
     oneLiner: 'חשבונית אחת, כמה סוגי הוצאות שונים (קניות + שירותים).',
     description:
       'ספק שמספק חומר גלם בחלק מהסכום ושירות בחלק אחר. כל קטגוריה הולכת לחשבון הוצאה שונה. בפורמט 180 דורש 2 רשומות, מקושרות לפי אסמכתא.',
@@ -239,7 +239,7 @@ export const RULES: AccountingRule[] = [
     code: 'WITH_COST_CENTER',
     title: 'חשבונית עם מרכז עלות',
     icon: Tags,
-    status: 'coming-soon',
+    status: 'auto-with-warning',
     oneLiner: 'חשבונית ששייכת לפרויקט / מחלקה — תוייגת לדוחות פנימיים.',
     description:
       'מרכז עלות הוא תיוג שמאפשר חיתוך פנימי: לראות כמה הוצאה לכל פרויקט, מחלקה, או יוזמה. דורש פורמט FLEXIBLE כי 180 לא תומך בשדה הזה.',

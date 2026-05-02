@@ -86,6 +86,21 @@ export const InvoiceHeaderSchema = z
     cost_center: z.string().optional(),
     /** FX rate for non-ILS currencies (units of ILS per unit of foreign currency). */
     fx_rate: z.number().positive().optional(),
+    /**
+     * For MULTI_EXPENSE scenarios — explicit splits of the subtotal across
+     * different expense accounts. If 2+ splits, MULTI_EXPENSE is triggered.
+     * Total of split amounts should equal the invoice subtotal.
+     */
+    expense_splits: z
+      .array(
+        z.object({
+          account: z.string().min(1).max(8),
+          amount: z.number().positive(),
+          label: z.string().optional(),
+          cost_center: z.string().optional(),
+        }),
+      )
+      .optional(),
   })
   .passthrough();
 export type InvoiceHeader = z.infer<typeof InvoiceHeaderSchema>;

@@ -119,19 +119,80 @@ describe('constructJE — overlays', () => {
   });
 });
 
-describe('constructJE — still-stubbed complex scenarios fall back to STANDARD', () => {
-  for (const scenario of ['MULTI_EXPENSE', 'WITH_COST_CENTER'] as const) {
-    it(`${scenario}: returns STANDARD-shaped JE + clear warning`, () => {
-      const detector =
-        scenario === 'WITH_COST_CENTER' ? { costCenter: 'PROJ-A' }
-        : { hasMultipleExpenseCategories: true };
-      const r = constructJE(inv(), config, detector);
-      expect(r.primaryScenario).toBe(scenario);
-      expect(r.warnings.length).toBeGreaterThan(0);
-      expect(r.records).toHaveLength(1);
-      expect(balanced(r.records[0]!)).toBe(true);
-    });
-  }
+describe('constructJE — MULTI_EXPENSE', () => {
+  it('with 2 expense_splits: produces 2 balanced records sharing reference', () => {
+    const r = constructJE(
+      inv(
+        {
+          expense_splits: [
+            { account: '503-0', amount: 1000, label: 'חומרי גלם' },
+            { account: '504-0', amount: 500, label: 'שירותים' },
+          ],
+        },
+        { subtotal: 1500, total: 1770 },
+      ),
+      config,
+    );
+    expect(r.primaryScenario).toBe('MULTI_EXPENSE');
+    expect(r.records).toHaveLength(2);
+    // Each record balanced
+    expect(balanced(r.records[0]!)).toBe(true);
+    expect(balanced(r.records[1]!)).toBe(true);
+    // Both share reference1
+    expect(r.records[0]!.reference1).toBe(r.records[1]!.reference1);
+    // Sum of supplier credits = total
+    const totalCredit = r.records.reduce(
+      (s, rec) =>
+        s +
+        rec.lines
+          .filter((l) => l.account === '200087')
+          .reduce((s2, l) => s2 + l.credit, 0),
+      0,
+    );
+    expect(totalCredit).toBeCloseTo(1770, 2);
+  });
+
+  it('warns when splits do not sum to subtotal', () => {
+    const r = constructJE(
+      inv(
+        {
+          expense_splits: [
+            { account: '503-0', amount: 800 },
+            { account: '504-0', amount: 500 },
+          ],
+        },
+        { subtotal: 1500, total: 1770 },
+      ),
+      config,
+    );
+    expect(r.warnings.some((w) => w.includes('סכום הביניים'))).toBe(true);
+  });
+
+  it('falls back to STANDARD when context flags multi but no splits provided', () => {
+    const r = constructJE(inv(), config, { hasMultipleExpenseCategories: true });
+    expect(r.primaryScenario).toBe('MULTI_EXPENSE');
+    expect(r.records).toHaveLength(1);
+    expect(r.warnings.some((w) => w.includes('פיצולים'))).toBe(true);
+  });
+});
+
+describe('constructJE — WITH_COST_CENTER', () => {
+  it('puts cost center on expense and VAT lines, warns about FLEXIBLE format', () => {
+    const r = constructJE(inv({ cost_center: 'PROJ-A' }), config);
+    expect(r.primaryScenario).toBe('WITH_COST_CENTER');
+    const lines = r.records[0]!.lines;
+    const expense = lines.find((l) => l.account === '502-0');
+    const vat = lines.find((l) => l.account === '205-2');
+    expect(expense?.costCenter).toBe('PROJ-A');
+    expect(vat?.costCenter).toBe('PROJ-A');
+    expect(r.warnings.some((w) => w.includes('FLEXIBLE'))).toBe(true);
+  });
+
+  it('via context override (preferred to invoice field)', () => {
+    const r = constructJE(inv(), config, { costCenter: 'OVR' });
+    const expense = r.records[0]!.lines.find((l) => l.account === '502-0');
+    expect(expense?.costCenter).toBe('OVR');
+  });
 });
 
 describe('constructJE — WITH_WITHHOLDING', () => {

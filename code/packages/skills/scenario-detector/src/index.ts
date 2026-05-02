@@ -105,8 +105,17 @@ export function detectScenario(
       overlays,
     };
   }
-  if (context.hasMultipleExpenseCategories) {
-    return { scenario: 'MULTI_EXPENSE', reason: 'multiple expense categories signal', overlays };
+  if (
+    context.hasMultipleExpenseCategories ||
+    (invoice.invoice.expense_splits && invoice.invoice.expense_splits.length > 1)
+  ) {
+    return {
+      scenario: 'MULTI_EXPENSE',
+      reason: invoice.invoice.expense_splits
+        ? `expense_splits with ${invoice.invoice.expense_splits.length} categories`
+        : 'multiple expense categories signal',
+      overlays,
+    };
   }
   if (costCenter) {
     return {

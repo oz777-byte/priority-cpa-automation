@@ -165,6 +165,39 @@ export default async function NewInvoicePage({
                 hint='נדרש כשהמטבע אינו ILS. שערי בנק ישראל אוטומטיים — בקרוב'
               />
             </Section>
+
+            <Section title='מרכז עלות'>
+              <Field
+                name="costCenter"
+                label='מרכז עלות / פרויקט'
+                placeholder='לדוגמה: PROJ-A'
+                dir="ltr"
+                hint='תיוג פנימי לדוחות חיתוך. דורש פורמט FLEXIBLE לייצוא — בקרוב'
+              />
+            </Section>
+
+            <Section title='פיצול הוצאה לקטגוריות (Multi-Expense)'>
+              <p className="text-xs text-ink-600 -mt-1">
+                אם החשבונית מכילה כמה סוגי הוצאות (לדוגמה: חומרי גלם + שירותים),
+                מלא את שני הפיצולים. סך הפיצולים צריך להיות שווה לסכום הביניים.
+              </p>
+              <div className="bg-white border border-ink-200 rounded-lg p-3 space-y-2">
+                <div className="text-xs font-semibold text-ink-600">פיצול 1</div>
+                <div className="grid grid-cols-3 gap-2">
+                  <Field name="split1Account" label='חשבון' placeholder='503-0' dir="ltr" />
+                  <Field name="split1Amount" label='סכום' type="number" step="0.01" dir="ltr" />
+                  <Field name="split1Label" label='תיאור' placeholder='חומרי גלם' />
+                </div>
+              </div>
+              <div className="bg-white border border-ink-200 rounded-lg p-3 space-y-2">
+                <div className="text-xs font-semibold text-ink-600">פיצול 2</div>
+                <div className="grid grid-cols-3 gap-2">
+                  <Field name="split2Account" label='חשבון' placeholder='504-0' dir="ltr" />
+                  <Field name="split2Amount" label='סכום' type="number" step="0.01" dir="ltr" />
+                  <Field name="split2Label" label='תיאור' placeholder='שירותים' />
+                </div>
+              </div>
+            </Section>
           </div>
         </details>
 

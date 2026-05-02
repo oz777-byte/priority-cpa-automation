@@ -9,6 +9,36 @@ import { requireUser } from '@/lib/auth';
 import { loadCompanyForUser } from '@/lib/company-context';
 import { getAdminClient } from '@/lib/supabase/admin';
 
+interface SplitFields {
+  split1Account?: string | undefined;
+  split1Amount?: number | undefined;
+  split1Label?: string | undefined;
+  split2Account?: string | undefined;
+  split2Amount?: number | undefined;
+  split2Label?: string | undefined;
+}
+
+function buildExpenseSplits(data: SplitFields):
+  | Array<{ account: string; amount: number; label?: string }>
+  | undefined {
+  const splits: Array<{ account: string; amount: number; label?: string }> = [];
+  if (data.split1Account && data.split1Amount && data.split1Amount > 0) {
+    splits.push({
+      account: data.split1Account,
+      amount: data.split1Amount,
+      ...(data.split1Label ? { label: data.split1Label } : {}),
+    });
+  }
+  if (data.split2Account && data.split2Amount && data.split2Amount > 0) {
+    splits.push({
+      account: data.split2Account,
+      amount: data.split2Amount,
+      ...(data.split2Label ? { label: data.split2Label } : {}),
+    });
+  }
+  return splits.length >= 2 ? splits : undefined;
+}
+
 const Input = z.object({
   companyId: z.string().uuid(),
   supplierName: z.string().min(2, 'שם ספק חייב להיות לפחות 2 תווים'),
@@ -30,6 +60,14 @@ const Input = z.object({
   withholdingPercent: z.coerce.number().min(0).max(100).optional(),
   mixedDeductionCategory: z.enum(['vehicle', 'meals', 'non_deductible']).optional(),
   fxRate: z.coerce.number().positive().optional(),
+  costCenter: z.string().max(20).optional(),
+  // Up to two expense splits for MULTI_EXPENSE scenarios.
+  split1Account: z.string().optional(),
+  split1Amount: z.coerce.number().nonnegative().optional(),
+  split1Label: z.string().optional(),
+  split2Account: z.string().optional(),
+  split2Amount: z.coerce.number().nonnegative().optional(),
+  split2Label: z.string().optional(),
 });
 
 export interface CreateInvoiceResult {
@@ -62,6 +100,13 @@ export async function createInvoiceManuallyAction(
     withholdingPercent: formData.get('withholdingPercent') || undefined,
     mixedDeductionCategory: formData.get('mixedDeductionCategory') || undefined,
     fxRate: formData.get('fxRate') || undefined,
+    costCenter: formData.get('costCenter') || undefined,
+    split1Account: formData.get('split1Account') || undefined,
+    split1Amount: formData.get('split1Amount') || undefined,
+    split1Label: formData.get('split1Label') || undefined,
+    split2Account: formData.get('split2Account') || undefined,
+    split2Amount: formData.get('split2Amount') || undefined,
+    split2Label: formData.get('split2Label') || undefined,
   });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.errors[0]?.message ?? 'נתונים לא תקינים' };
@@ -126,6 +171,8 @@ export async function createInvoiceManuallyAction(
         ? { mixed_deduction_category: data.mixedDeductionCategory }
         : {}),
       ...(data.fxRate ? { fx_rate: data.fxRate } : {}),
+      ...(data.costCenter ? { cost_center: data.costCenter } : {}),
+      ...(buildExpenseSplits(data) ? { expense_splits: buildExpenseSplits(data) } : {}),
     },
     supplier: {
       name: data.supplierName,

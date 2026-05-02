@@ -89,13 +89,19 @@ export function constructJE(
       records = [buildForeignCurrency(invoice, config, warnings)];
       break;
 
-    // Still stubbed — fall back to STANDARD with a warning.
     case 'MULTI_EXPENSE':
+      records = buildMultiExpense(invoice, config, warnings);
+      break;
+
     case 'WITH_COST_CENTER':
-      records = [buildStandard(invoice, config, detection.scenario)];
-      warnings.push(
-        `תרחיש ${detection.scenario} זוהה — הטיפול האוטומטי המלא טרם פעיל; JE נבנה כתרחיש סטנדרטי. ערוך ידנית בעורך פקודות יומן לפי הצורך.`,
-      );
+      records = [
+        buildWithCostCenter(
+          invoice,
+          config,
+          (detectorContext.costCenter ?? invoice.invoice.cost_center) ?? '',
+          warnings,
+        ),
+      ];
       break;
 
     default:
@@ -462,5 +468,168 @@ function buildForeignCurrency(
       `שער חליפין: ${r.toFixed(4)} (${invoice.invoice.currency} → ILS)`,
       'הפרשי שער ייווצרו בעת תשלום בפועל',
     ],
+  };
+}
+
+/**
+ * MULTI_EXPENSE — invoice has multiple expense categories (e.g. raw materials
+ * + services in one supplier invoice). Each category goes to a different
+ * expense account. In 180-format this requires N records sharing the same
+ * reference1 so Priority links them; FLEXIBLE format would allow a single
+ * record with N+1 lines.
+ *
+ * One record per split. Each:
+ *   DR  split.account            split.amount
+ *   DR  vat_input                 split.amount × vat_share
+ *   CR  supplier                  split.amount + vat_share
+ *
+ * VAT is allocated proportionally across splits.
+ */
+function buildMultiExpense(
+  invoice: CanonicalInvoice,
+  config: ConstructorConfig,
+  warnings: string[],
+): JERecord[] {
+  const splits = invoice.invoice.expense_splits ?? [];
+  if (splits.length < 2) {
+    warnings.push(
+      'MULTI_EXPENSE: פחות משני פיצולים — נופל ל-STANDARD. הוסף פיצולים בטופס החשבונית.',
+    );
+    return [buildStandard(invoice, config, 'MULTI_EXPENSE')];
+  }
+
+  const subtotal = invoice.totals.subtotal;
+  const total = invoice.totals.total;
+  const totalVat = vatFromTotals(invoice);
+  const splitsSum = splits.reduce((s, sp) => s + sp.amount, 0);
+
+  if (Math.abs(splitsSum - subtotal) > 0.05) {
+    warnings.push(
+      `MULTI_EXPENSE: סך פיצולי ההוצאה (${splitsSum.toFixed(2)}) ≠ סכום הביניים (${subtotal.toFixed(2)}). ערוך ידנית או תקן את הפיצולים.`,
+    );
+  }
+
+  const reference1 = invoice.invoice.number;
+  const supplier = invoice.supplier.internal_code_priority;
+  const records: JERecord[] = [];
+
+  // Distribute VAT proportionally; rounding remainder goes to last split.
+  let vatRemaining = totalVat;
+  const baseHeader = {
+    reference1,
+    documentDate: invoice.invoice.date,
+    valueDate: valueDateOf(invoice),
+    currency: invoice.invoice.currency,
+    transactionType: config.transactionType,
+    scenario: 'MULTI_EXPENSE' as const,
+  };
+
+  splits.forEach((split, i) => {
+    const isLast = i === splits.length - 1;
+    const portionVat = isLast
+      ? vatRemaining
+      : roundCents((split.amount / subtotal) * totalVat);
+    vatRemaining = roundCents(vatRemaining - portionVat);
+    const portionTotal = roundCents(split.amount + portionVat);
+
+    const lines: JELine[] = [
+      {
+        account: split.account,
+        debit: split.amount,
+        credit: 0,
+        ...(split.cost_center ? { costCenter: split.cost_center } : {}),
+        ...(split.label ? { details: split.label } : {}),
+      },
+      { account: config.vatInputAccount, debit: portionVat, credit: 0 },
+      { account: supplier, debit: 0, credit: portionTotal },
+    ];
+
+    records.push({
+      ...baseHeader,
+      details: `${detailsString(invoice, config)} (${i + 1}/${splits.length}${
+        split.label ? ` ${split.label}` : ''
+      })`,
+      recordIndex: i,
+      lines,
+      notes: [
+        `חלק ${i + 1} מתוך ${splits.length}: ${split.amount.toFixed(2)} ₪${
+          split.label ? ` — ${split.label}` : ''
+        }`,
+      ],
+    });
+  });
+
+  // Sanity check: across all records, supplier credit total = invoice total
+  const totalSupplierCredit = records.reduce(
+    (s, r) =>
+      s +
+      r.lines
+        .filter((l) => l.account === supplier)
+        .reduce((s2, l) => s2 + l.credit, 0),
+    0,
+  );
+  if (Math.abs(totalSupplierCredit - total) > 0.05) {
+    warnings.push(
+      `MULTI_EXPENSE: סך הזכות לספק על פני הרשומות (${totalSupplierCredit.toFixed(2)}) ≠ סך החשבונית (${total.toFixed(2)}). בדוק עיגולים.`,
+    );
+  }
+
+  return records;
+}
+
+/**
+ * WITH_COST_CENTER — same 3-line structure as STANDARD but each expense /
+ * VAT line gets the cost-center tag. The 180-format does NOT have a
+ * cost-center field, so the JE is built but flagged for FLEXIBLE export.
+ */
+function buildWithCostCenter(
+  invoice: CanonicalInvoice,
+  config: ConstructorConfig,
+  costCenter: string,
+  warnings: string[],
+): JERecord {
+  const subtotal = invoice.totals.subtotal;
+  const total = invoice.totals.total;
+  const vat = vatFromTotals(invoice);
+
+  if (!costCenter) {
+    warnings.push('WITH_COST_CENTER: לא צוין מרכז עלות — JE נבנה כסטנדרטי.');
+  }
+
+  const lines: JELine[] = [
+    {
+      account: config.expenseAccount,
+      debit: subtotal,
+      credit: 0,
+      ...(costCenter ? { costCenter } : {}),
+    },
+    {
+      account: config.vatInputAccount,
+      debit: vat,
+      credit: 0,
+      ...(costCenter ? { costCenter } : {}),
+    },
+    {
+      account: invoice.supplier.internal_code_priority,
+      debit: 0,
+      credit: total,
+    },
+  ];
+
+  warnings.push(
+    `מרכז עלות "${costCenter}" שמור בשורות ה-JE; פורמט 180 אינו כולל שדה מרכז עלות. ייצוא ידרוש FLEXIBLE format (יתווסף בשלב הבא) — בינתיים מרכז העלות נשמר ב-DB ובפרטים.`,
+  );
+
+  return {
+    reference1: invoice.invoice.number,
+    documentDate: invoice.invoice.date,
+    valueDate: valueDateOf(invoice),
+    currency: invoice.invoice.currency,
+    details: `${detailsString(invoice, config)}${costCenter ? ` [${costCenter}]` : ''}`,
+    transactionType: config.transactionType,
+    scenario: 'WITH_COST_CENTER',
+    recordIndex: 0,
+    lines,
+    notes: costCenter ? [`מרכז עלות: ${costCenter}`] : [],
   };
 }
