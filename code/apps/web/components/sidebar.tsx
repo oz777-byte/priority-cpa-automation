@@ -17,6 +17,7 @@ import {
   BarChart3,
   Settings,
   Wallet,
+  BookOpen,
   Shield,
   FileText,
   LogOut,
@@ -137,6 +138,13 @@ export function Sidebar({
             active={pathname.startsWith('/dashboard/help')}
           >
             מדריך הפעלה
+          </NavItem>
+          <NavItem
+            href="/dashboard/accounting-rules"
+            icon={BookOpen}
+            active={pathname.startsWith('/dashboard/accounting-rules')}
+          >
+            חוקי הנהלת חשבונות
           </NavItem>
           <NavItem
             href="/privacy"
