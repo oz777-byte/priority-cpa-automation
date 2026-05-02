@@ -1,8 +1,8 @@
-import { Settings, AlertCircle } from 'lucide-react';
-import { ComingSoon } from '@/components/coming-soon';
+import { Settings, Banknote, Percent, AlertCircle } from 'lucide-react';
 import { requireUser } from '@/lib/auth';
 import { loadCompanyForUser } from '@/lib/company-context';
-import type { CompanySettings } from '@/lib/company-config';
+import { CompanySettings, DEFAULT_SETTINGS } from '@/lib/company-config';
+import { updateCompanySettingsAction } from './actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,59 +15,172 @@ export default async function CompanySettingsPage({
   const company = await loadCompanyForUser(me.id, me.email, params.companyId);
   const settings = (company.settings ?? {}) as CompanySettings;
 
+  async function submitForm(formData: FormData): Promise<void> {
+    'use server';
+    const r = await updateCompanySettingsAction(formData);
+    if (!r.ok) {
+      throw new Error(r.error ?? 'שמירת הגדרות נכשלה');
+    }
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="max-w-3xl space-y-5">
       <div>
         <h2 className="text-lg font-semibold text-ink-900 flex items-center gap-2">
           <Settings size={18} className="text-brand-500" />
           הגדרות חברה
         </h2>
         <p className="text-sm text-ink-600 mt-0.5">
-          הגדרות של {company.name} — חשבונות חשבונאיים, מטבע, סוג תנועה.
+          ההגדרות של {company.name} משפיעות על כל פקודת יומן שתיווצר. ערכים
+          ריקים מקבלים ברירת מחדל ישראלית סטנדרטית.
         </p>
       </div>
 
-      <section className="bg-white border border-ink-200 rounded-xl p-5 space-y-4">
-        <h3 className="text-sm font-semibold text-ink-900">פרטים חשבונאיים</h3>
-        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-          <ReadOnlyField label="שם החברה" value={company.name} />
-          <ReadOnlyField label="מספר עוסק" value={company.tax_id} dir="ltr" />
-          <ReadOnlyField label="גרסת פריוריטי" value={company.priority_version ?? '—'} dir="ltr" />
-          <ReadOnlyField label="סטטוס" value={statusLabel(company.status)} />
-          <ReadOnlyField label="חשבון הוצאה ברירת מחדל" value={settings.expense_account ?? '502-0'} dir="ltr" />
-          <ReadOnlyField label='חשבון מע"מ תשומות' value={settings.vat_input_account ?? '205-2'} dir="ltr" />
-          <ReadOnlyField label="סוג תנועה" value={settings.transaction_type ?? 'מ'} />
-          <ReadOnlyField label="קידומת פרטים" value={settings.details_prefix ?? 'קניות'} />
-        </dl>
-        <div className="text-xs text-ink-400 flex items-center gap-1.5 pt-2 border-t border-ink-100">
-          <AlertCircle size={12} />
-          לעת עתה הערכים נקבעו בעת יצירת החברה. עריכת הגדרות חברה תתאפשר בקרוב.
+      {/* Read-only company facts */}
+      <section className="bg-white border border-ink-200 rounded-xl p-5 space-y-3">
+        <h3 className="text-xs uppercase tracking-wider text-ink-500 font-semibold">
+          זהות החברה
+        </h3>
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <ReadOnly label="שם" value={company.name} />
+          <ReadOnly label="מספר עוסק" value={company.tax_id} dir="ltr" />
+          <ReadOnly label="גרסת פריוריטי" value={company.priority_version ?? '—'} dir="ltr" />
+          <ReadOnly label="סטטוס" value={statusLabel(company.status)} />
+        </div>
+        <div className="text-xs text-ink-400 flex items-center gap-1.5 pt-1">
+          <AlertCircle size={11} />
+          לעריכת שם/ע.מ — ניהול חברות ← פתיחת חברה
         </div>
       </section>
 
-      <ComingSoon
-        title="עוד הגדרות בקרוב"
-        description="מסך זה יורחב להגדרות מלאות של החברה."
-        features={[
-          'עריכת שם, ע.מ ופרטי קשר.',
-          'הגדרת חשבונות ברירת מחדל לפי סוג הוצאה (קניות, שירותים, חומרי גלם).',
-          'הגדרת מרכזי עלות (פרויקטים, מחלקות).',
-          'הגדרות מטבע חוץ — חשבונות USD/EUR נפרדים.',
-          'מקור שערי חליפין: בנק ישראל אוטומטי / הזנה ידנית.',
-          'הקצאת רף — חוק 2024+ (מתי חובה מספר הקצאה).',
-          'PCN874 — הגדרות דיווח מע"מ מקוון.',
-          'השעיה / ארכוב של החברה.',
-        ]}
-      />
+      <form action={submitForm} className="space-y-5">
+        <input type="hidden" name="companyId" value={company.id} />
+
+        <FormSection
+          icon={Settings}
+          title="ברירות מחדל לפקודות יומן"
+          description="הערכים האלו משמשים בכל JE שנבנה אוטומטית מחשבונית."
+        >
+          <div className="grid grid-cols-2 gap-3">
+            <Field
+              name="expense_account"
+              label="חשבון הוצאה ברירת מחדל"
+              defaultValue={settings.expense_account}
+              placeholder={DEFAULT_SETTINGS.expense_account}
+              dir="ltr"
+              hint="לדוגמה: 502-0 (קניות חומרים)"
+            />
+            <Field
+              name="vat_input_account"
+              label='חשבון מע"מ תשומות'
+              defaultValue={settings.vat_input_account}
+              placeholder={DEFAULT_SETTINGS.vat_input_account}
+              dir="ltr"
+              hint='ברירת מחדל ישראלית: 205-2'
+            />
+            <Field
+              name="transaction_type"
+              label="סוג תנועה"
+              defaultValue={settings.transaction_type}
+              placeholder={DEFAULT_SETTINGS.transaction_type}
+              hint='קוד פריוריטי, לדוגמה: "מ" לחשבונית מס'
+              maxLength={3}
+            />
+            <SelectField
+              name="currency"
+              label="מטבע ראשי"
+              defaultValue={settings.currency ?? DEFAULT_SETTINGS.currency}
+              options={['ILS', 'USD', 'EUR', 'GBP']}
+            />
+            <Field
+              name="details_prefix"
+              label="קידומת פרטים"
+              defaultValue={settings.details_prefix}
+              placeholder={DEFAULT_SETTINGS.details_prefix}
+              hint='נכלל בשדה הפרטים של כל JE — לדוגמה: "קניות"'
+              maxLength={30}
+            />
+          </div>
+        </FormSection>
+
+        <FormSection
+          icon={Banknote}
+          title="חשבונות תשלום"
+          description='לחשבוניות בתשלום מיידי — JE יזקוף לחשבון התשלום במקום לחשבון הספק.
+            השאר ריק אם החברה לא משלמת בדרך הזו.'
+        >
+          <div className="grid grid-cols-3 gap-3">
+            <Field
+              name="payment_account_cash"
+              label="מזומן"
+              defaultValue={settings.payment_account_cash}
+              placeholder='100-0'
+              dir="ltr"
+            />
+            <Field
+              name="payment_account_card"
+              label="כרטיס אשראי"
+              defaultValue={settings.payment_account_card}
+              placeholder='125-0'
+              dir="ltr"
+            />
+            <Field
+              name="payment_account_bank"
+              label="העברה בנקאית"
+              defaultValue={settings.payment_account_bank}
+              placeholder='121-0'
+              dir="ltr"
+              hint='בנק ראשי לתשלומי העברה'
+            />
+          </div>
+        </FormSection>
+
+        <FormSection
+          icon={Percent}
+          title="חשבונות מיוחדים"
+          description="חשבונות ייעודיים לתרחישים חשבונאיים מורכבים."
+        >
+          <div className="grid grid-cols-2 gap-3">
+            <Field
+              name="withholding_account"
+              label="ניכוי מס במקור — רשות המסים"
+              defaultValue={settings.withholding_account}
+              placeholder='175-0'
+              dir="ltr"
+              hint='זכות בכל JE עם withholding_percent. ללא זה — אזהרה'
+            />
+            <Field
+              name="non_deductible_account"
+              label='הוצאה לא מנוכה (מע"מ מעורב)'
+              defaultValue={settings.non_deductible_account}
+              placeholder='502-1'
+              dir="ltr"
+              hint='לרכב 2/3, אש"ל 1/4, וכו׳'
+            />
+          </div>
+        </FormSection>
+
+        <div className="flex justify-end gap-3 pt-2">
+          <button
+            type="submit"
+            className="px-5 py-2 bg-accent-600 text-white rounded-lg text-sm font-medium hover:bg-accent-500"
+          >
+            שמור הגדרות
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
 
 function statusLabel(status: string): string {
-  return { active: 'פעיל', paused: 'מושהה', archived: 'בארכיון' }[status] ?? status;
+  return ({ active: 'פעיל', paused: 'מושהה', archived: 'בארכיון' } as Record<
+    string,
+    string
+  >)[status] ?? status;
 }
 
-function ReadOnlyField({
+function ReadOnly({
   label,
   value,
   dir,
@@ -78,10 +191,103 @@ function ReadOnlyField({
 }) {
   return (
     <div>
-      <dt className="text-xs text-ink-600 mb-1">{label}</dt>
-      <dd className="px-3 py-2 bg-ink-50 border border-ink-200 rounded text-ink-900" dir={dir}>
+      <div className="text-xs text-ink-600 mb-1">{label}</div>
+      <div className="px-3 py-2 bg-ink-50 border border-ink-200 rounded text-sm text-ink-900" dir={dir}>
         {value}
-      </dd>
+      </div>
+    </div>
+  );
+}
+
+function FormSection({
+  icon: Icon,
+  title,
+  description,
+  children,
+}: {
+  icon: typeof Settings;
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="bg-white border border-ink-200 rounded-xl p-5 space-y-4">
+      <div className="flex items-start gap-2.5">
+        <div className="w-8 h-8 rounded-lg bg-accent-500/10 text-accent-600 flex items-center justify-center flex-shrink-0">
+          <Icon size={15} />
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-ink-900">{title}</h3>
+          {description && (
+            <p className="text-xs text-ink-600 mt-0.5 leading-relaxed">
+              {description}
+            </p>
+          )}
+        </div>
+      </div>
+      <div className="pt-1">{children}</div>
+    </section>
+  );
+}
+
+function Field({
+  name,
+  label,
+  defaultValue,
+  placeholder,
+  dir,
+  hint,
+  maxLength,
+}: {
+  name: string;
+  label: string;
+  defaultValue?: string | undefined;
+  placeholder?: string | undefined;
+  dir?: 'ltr' | 'rtl' | undefined;
+  hint?: string | undefined;
+  maxLength?: number | undefined;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-ink-700 mb-1">{label}</label>
+      <input
+        name={name}
+        defaultValue={defaultValue ?? ''}
+        placeholder={placeholder}
+        dir={dir}
+        maxLength={maxLength}
+        className="w-full px-3 py-2 border border-ink-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
+      />
+      {hint && <div className="text-[11px] text-ink-400 mt-1">{hint}</div>}
+    </div>
+  );
+}
+
+function SelectField({
+  name,
+  label,
+  defaultValue,
+  options,
+}: {
+  name: string;
+  label: string;
+  defaultValue?: string;
+  options: string[];
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-ink-700 mb-1">{label}</label>
+      <select
+        name={name}
+        defaultValue={defaultValue}
+        className="w-full px-3 py-2 border border-ink-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 bg-white"
+      >
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

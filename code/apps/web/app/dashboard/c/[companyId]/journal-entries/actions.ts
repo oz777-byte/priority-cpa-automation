@@ -6,18 +6,8 @@ import {
   type CanonicalInvoice,
 } from '@priority-cpa/invoice-schema';
 import { constructJE } from '@priority-cpa/je-constructor';
-import type { ConstructorConfig } from '@priority-cpa/je-constructor';
 import { getAdminClient } from '@/lib/supabase/admin';
-import type { CompanySettings } from '@/lib/company-config';
-
-function settingsToConstructorConfig(s: CompanySettings): ConstructorConfig {
-  return {
-    expenseAccount: s.expense_account ?? '502-0',
-    vatInputAccount: s.vat_input_account ?? '205-2',
-    detailsPrefix: s.details_prefix ?? 'קניות',
-    transactionType: s.transaction_type ?? 'מ',
-  };
-}
+import { type CompanySettings, constructorConfigFor } from '@/lib/company-config';
 
 /**
  * Backfill: ensure every queued/classified invoice in `companyId` has a
@@ -40,7 +30,6 @@ export async function ensureDraftJEsForCompany(
     .maybeSingle();
   if (!company) return { created: 0 };
   const settings = (company.settings ?? {}) as CompanySettings;
-  const config = settingsToConstructorConfig(settings);
 
   const { data: orphans } = await admin
     .from('invoices_inbox')
@@ -61,6 +50,9 @@ export async function ensureDraftJEsForCompany(
     if (!parsed.success) continue;
     const canonical: CanonicalInvoice = parsed.data;
 
+    // Build per-invoice config so paymentAccount / withholdingAccount /
+    // nonDeductibleAccount are resolved against the invoice's payment_method.
+    const config = constructorConfigFor(settings, canonical);
     const result = constructJE(canonical, config);
 
     // For now: each detected JERecord is stored as a separate journal_entries
