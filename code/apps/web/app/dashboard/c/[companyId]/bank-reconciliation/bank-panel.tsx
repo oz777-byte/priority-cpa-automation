@@ -9,9 +9,16 @@ import {
   CheckCircle2,
   XCircle,
   CircleDashed,
+  Sparkles,
 } from 'lucide-react';
 import { DataTable, type Column } from '@/components/data-table';
-import { addManualTxnAction, importCsvAction, deleteTxnAction, setTxnStatusAction } from './actions';
+import {
+  addManualTxnAction,
+  importCsvAction,
+  deleteTxnAction,
+  setTxnStatusAction,
+  autoMatchAction,
+} from './actions';
 
 export type TxnStatus = 'unreconciled' | 'matched' | 'ignored';
 
@@ -102,6 +109,26 @@ export function BankPanel({
     startTransition(async () => {
       const r = await setTxnStatusAction(fd);
       if (!r.ok) setError(r.error ?? 'שגיאה');
+    });
+  }
+
+  function onAutoMatch() {
+    setError(null);
+    setInfo(null);
+    const fd = new FormData();
+    fd.set('companyId', companyId);
+    startTransition(async () => {
+      const r = await autoMatchAction(fd);
+      if (!r.ok) {
+        setError(r.error ?? 'התאמה אוטומטית נכשלה');
+        return;
+      }
+      const parts: string[] = [];
+      parts.push(`נסרקו ${r.scanned ?? 0} תנועות לא מותאמות`);
+      if (r.matched) parts.push(`${r.matched} הותאמו אוטומטית`);
+      if (r.ambiguous) parts.push(`${r.ambiguous} עם יותר מ-JE תואם — ידני`);
+      if (r.unmatched) parts.push(`${r.unmatched} ללא JE תואם`);
+      setInfo(parts.join(' · '));
     });
   }
 
@@ -319,6 +346,21 @@ export function BankPanel({
                 <Plus size={14} />
                 תנועה ידנית
               </button>
+              {counts.unreconciled > 0 && (
+                <button
+                  onClick={onAutoMatch}
+                  disabled={pending}
+                  className="px-3 py-2 border border-accent-200 text-accent-700 rounded-lg text-sm hover:bg-accent-50 disabled:opacity-50 flex items-center gap-1.5"
+                  title="חיפוש אוטומטי של JE תואם לכל תנועה לא מותאמת"
+                >
+                  {pending ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Sparkles size={14} />
+                  )}
+                  התאמה אוטומטית ({counts.unreconciled})
+                </button>
+              )}
             </div>
           ) : null
         }

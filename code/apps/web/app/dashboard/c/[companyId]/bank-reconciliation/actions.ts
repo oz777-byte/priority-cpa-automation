@@ -208,6 +208,159 @@ export async function deleteTxnAction(
   return { ok: true };
 }
 
+export interface AutoMatchResult {
+  ok: boolean;
+  error?: string;
+  scanned?: number;
+  matched?: number;
+  ambiguous?: number;
+  unmatched?: number;
+}
+
+const MATCH_WINDOW_DAYS = 7;
+const AMOUNT_TOLERANCE = 0.01;
+
+/**
+ * Scan unreconciled bank transactions and link each to a JE when the
+ * match is unambiguous. Match criteria:
+ *   - bank txn is an outflow (negative amount)
+ *   - some JE has |bank amount| = sum-of-debits (== sum-of-credits)
+ *   - JE document_date within ±7 days of txn_date
+ *   - JE not already matched to a different bank txn
+ * If multiple JEs match a single txn, the txn is left for manual review.
+ */
+export async function autoMatchAction(
+  formData: FormData,
+): Promise<AutoMatchResult> {
+  const me = await requireUser();
+  const admin = getAdminClient();
+  const audit = new SupabaseAuditStore(admin);
+
+  const companyId = z.string().uuid().parse(formData.get('companyId'));
+  const company = await loadCompanyForUser(me.id, me.email, companyId);
+
+  // Bank txns to consider: unreconciled, with negative amount (outflows).
+  const { data: txnRows } = await admin
+    .from('bank_transactions')
+    .select('id, txn_date, amount_ils')
+    .eq('company_id', company.id)
+    .eq('status', 'unreconciled')
+    .lt('amount_ils', 0);
+  const txns = (txnRows ?? []) as Array<{
+    id: string;
+    txn_date: string;
+    amount_ils: number;
+  }>;
+
+  if (txns.length === 0) {
+    return { ok: true, scanned: 0, matched: 0, ambiguous: 0, unmatched: 0 };
+  }
+
+  // Candidate JEs: not already linked to a bank txn (i.e., no bank txn has
+  // matched_je_id = this JE's id).
+  const { data: jeRows } = await admin
+    .from('journal_entries')
+    .select('id, document_date')
+    .eq('company_id', company.id);
+
+  const { data: lineRows } = await admin
+    .from('journal_entry_lines')
+    .select('je_id, debit')
+    .in(
+      'je_id',
+      ((jeRows ?? []) as Array<{ id: string }>).map((j) => j.id),
+    );
+
+  const { data: alreadyMatched } = await admin
+    .from('bank_transactions')
+    .select('matched_je_id')
+    .eq('company_id', company.id)
+    .not('matched_je_id', 'is', null);
+  const matchedSet = new Set(
+    ((alreadyMatched ?? []) as Array<{ matched_je_id: string | null }>)
+      .map((r) => r.matched_je_id)
+      .filter((v): v is string => !!v),
+  );
+
+  // total per JE = sum of debit amounts (== credit by balance).
+  const totalByJE = new Map<string, number>();
+  for (const l of (lineRows ?? []) as Array<{ je_id: string; debit: number }>) {
+    totalByJE.set(l.je_id, (totalByJE.get(l.je_id) ?? 0) + Number(l.debit));
+  }
+
+  const candidates = ((jeRows ?? []) as Array<{ id: string; document_date: string }>)
+    .filter((j) => !matchedSet.has(j.id))
+    .map((j) => ({
+      id: j.id,
+      date: j.document_date,
+      total: Math.round((totalByJE.get(j.id) ?? 0) * 100) / 100,
+    }))
+    .filter((j) => j.total > 0);
+
+  let matched = 0;
+  let ambiguous = 0;
+  let unmatched = 0;
+  const usedJEIds = new Set<string>();
+
+  // Sort txns by date to make matching deterministic when there are dupes.
+  txns.sort((a, b) => a.txn_date.localeCompare(b.txn_date));
+
+  for (const txn of txns) {
+    const target = Math.round(Math.abs(Number(txn.amount_ils)) * 100) / 100;
+    const txnTime = new Date(txn.txn_date).getTime();
+
+    const found = candidates.filter((c) => {
+      if (usedJEIds.has(c.id)) return false;
+      if (Math.abs(c.total - target) > AMOUNT_TOLERANCE) return false;
+      const days =
+        Math.abs(txnTime - new Date(c.date).getTime()) / (24 * 60 * 60 * 1000);
+      return days <= MATCH_WINDOW_DAYS;
+    });
+
+    if (found.length === 1) {
+      const je = found[0]!;
+      const { error } = await admin
+        .from('bank_transactions')
+        .update({ status: 'matched', matched_je_id: je.id })
+        .eq('id', txn.id)
+        .eq('company_id', company.id);
+      if (!error) {
+        matched++;
+        usedJEIds.add(je.id);
+      }
+    } else if (found.length > 1) {
+      ambiguous++;
+    } else {
+      unmatched++;
+    }
+  }
+
+  await audit.log({
+    companyId: company.id,
+    userId: me.id,
+    action: 'bank_txn.auto_match',
+    entityType: 'company',
+    entityId: company.id,
+    payload: {
+      scanned: txns.length,
+      matched,
+      ambiguous,
+      unmatched,
+      window_days: MATCH_WINDOW_DAYS,
+      requested_by: me.email,
+    },
+  });
+
+  revalidatePath(`/dashboard/c/${company.id}/bank-reconciliation`);
+  return {
+    ok: true,
+    scanned: txns.length,
+    matched,
+    ambiguous,
+    unmatched,
+  };
+}
+
 export async function setTxnStatusAction(
   formData: FormData,
 ): Promise<MutationResult> {

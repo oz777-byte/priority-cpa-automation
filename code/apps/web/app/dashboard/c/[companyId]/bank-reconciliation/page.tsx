@@ -68,8 +68,9 @@ export default async function BankReconciliationPage({
       <BankPanel rows={rows} companyId={company.id} />
 
       <div className="bg-ink-50/40 border border-ink-100 rounded-lg p-3 text-xs text-ink-600 leading-relaxed">
-        <strong>הצעד הבא:</strong> סימון אוטומטי של תנועות בנק כ-"הותאם" כשסכום
-        התנועה והתאריך תואמים JE קיים — בקרוב. כרגע הסימון ידני.
+        <strong>התאמה אוטומטית</strong> — לחץ על הכפתור בסרגל לסריקת כל התנועות
+        הלא-מותאמות. המערכת מקשרת אוטומטית כשסכום התנועה תואם JE עם תאריך
+        חשבונית בחלון של 7 ימים. אם יש יותר מ-JE אחד תואם, התנועה נשארת ידנית.
       </div>
     </div>
   );
