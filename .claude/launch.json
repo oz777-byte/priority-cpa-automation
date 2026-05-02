@@ -5,8 +5,8 @@
       "name": "web (Next.js)",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--workspace", "@priority-cpa/web"],
-      "port": 3000,
-      "cwd": "code"
+      "cwd": "code",
+      "autoPort": true
     }
   ]
 }

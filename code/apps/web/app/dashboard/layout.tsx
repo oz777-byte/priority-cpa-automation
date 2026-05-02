@@ -4,16 +4,15 @@ import {
   Inbox,
   FileEdit,
   Building2,
-  Settings,
-  Users,
+  HelpCircle,
 } from 'lucide-react';
 import { requireUser } from '@/lib/auth';
 import {
   listCompaniesForUser,
   getCurrentCompany,
 } from '@/lib/current-company';
-import { LogoutButton } from './logout-button';
 import { CompanySwitcher } from './company-switcher';
+import { UserMenu } from './user-menu';
 import { BrandLogo } from '@/components/brand-logo';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -24,38 +23,39 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div className="min-h-screen flex flex-col bg-ink-50">
       <header className="bg-white border-b border-ink-200 px-6 py-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-8">
-            <Link href="/dashboard">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-8 min-w-0">
+            <Link href="/dashboard" className="flex-shrink-0">
               <BrandLogo size="sm" />
             </Link>
             <nav className="flex items-center gap-1 text-sm">
               <NavLink href="/dashboard" icon={LayoutDashboard}>ראשי</NavLink>
+              <NavLink href="/dashboard/companies" icon={Building2}>החברות שלי</NavLink>
               <NavLink href="/dashboard/invoices" icon={Inbox}>חשבוניות</NavLink>
               <NavLink href="/dashboard/journal-entries" icon={FileEdit}>פקודות יומן</NavLink>
-              <NavLink href="/dashboard/companies" icon={Building2}>חברות</NavLink>
-              <NavLink href="/dashboard/settings" icon={Settings}>הגדרות</NavLink>
-              {user.role === 'admin' && (
-                <NavLink href="/dashboard/admin/users" icon={Users}>משתמשים</NavLink>
-              )}
+              <NavLink href="/dashboard/help" icon={HelpCircle}>עזרה</NavLink>
             </nav>
           </div>
-          <div className="flex items-center gap-3 text-sm">
-            <CompanySwitcher
-              companies={companies.map((c) => ({ id: c.id, name: c.name }))}
-              currentId={current?.id ?? null}
-            />
-            {user.role === 'admin' && (
-              <span className="px-2 py-0.5 rounded bg-accent-500/10 text-accent-600 text-xs font-medium">
-                מנהל
-              </span>
+          <div className="flex items-center gap-2 text-sm flex-shrink-0">
+            {companies.length > 0 && (
+              <CompanySwitcher
+                companies={companies.map((c) => ({ id: c.id, name: c.name }))}
+                currentId={current?.id ?? null}
+              />
             )}
-            <span className="text-ink-600 text-xs" dir="ltr">{user.email}</span>
-            <LogoutButton />
+            <UserMenu email={user.email} isAdmin={user.role === 'admin'} />
           </div>
         </div>
       </header>
       <main className="flex-1 p-6">{children}</main>
+      <footer className="border-t border-ink-200 px-6 py-3 text-xs text-ink-400 text-center">
+        Priority CPA Automation · נבנה ע״י{' '}
+        <span className="font-semibold text-ink-600">O.S Tech Ventures</span>
+        {' · '}
+        <Link href="/privacy" className="hover:text-ink-600">מדיניות פרטיות</Link>
+        {' · '}
+        <Link href="/terms" className="hover:text-ink-600">תנאי שימוש</Link>
+      </footer>
     </div>
   );
 }
