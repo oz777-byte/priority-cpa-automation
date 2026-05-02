@@ -3,22 +3,29 @@ import { SupabaseAuditStore } from '@priority-cpa/audit-logger';
 import { buildRawRecord, encodeMoveInBuffer } from '@priority-cpa/movein-generator';
 import { requireUser } from '@/lib/auth';
 import { getCurrentCompany } from '@/lib/current-company';
+import { loadCompanyForUser } from '@/lib/company-context';
 import { getAdminClient } from '@/lib/supabase/admin';
 
 export async function POST(request: NextRequest) {
   const me = await requireUser();
-  const company = await getCurrentCompany(me.id, me.email);
+  const url = new URL(request.url);
+  const companyIdParam = url.searchParams.get('companyId');
+
+  // Prefer the URL companyId (workspace-scoped flow). Fall back to cookie
+  // (legacy flow / global "export current company" buttons).
+  const company = companyIdParam
+    ? await loadCompanyForUser(me.id, me.email, companyIdParam)
+    : await getCurrentCompany(me.id, me.email);
+
   if (!company) {
     return NextResponse.json({ error: 'no_company' }, { status: 400 });
   }
 
-  const url = new URL(request.url);
-  const singleJEId = url.searchParams.get('je'); // optional UUID for single-JE download
+  const singleJEId = url.searchParams.get('je');
 
   const admin = getAdminClient();
   const audit = new SupabaseAuditStore(admin);
 
-  // Pull JEs to export
   let jeQ = admin
     .from('journal_entries')
     .select('id, transaction_type, reference1, reference2, document_date, value_date, currency, details, status, invoice_id')
@@ -66,7 +73,6 @@ export async function POST(request: NextRequest) {
     const cr = lines.filter((l) => l.credit > 0).slice(0, 2);
     if (dr.length === 0 || cr.length === 0) continue;
 
-    // Balance check (within ±0.05)
     const drSum = lines.reduce((s, l) => s + l.debit, 0);
     const crSum = lines.reduce((s, l) => s + l.credit, 0);
     if (Math.abs(drSum - crSum) > 0.05) continue;
@@ -94,7 +100,7 @@ export async function POST(request: NextRequest) {
       exportedJEIds.push(je.id as string);
       if (je.invoice_id) exportedInvoiceIds.push(je.invoice_id as string);
     } catch {
-      // record build failed — skip this JE silently for now (logs come later)
+      /* skip malformed JE */
     }
   }
 
@@ -106,8 +112,6 @@ export async function POST(request: NextRequest) {
   }
 
   const buffer = encodeMoveInBuffer(records);
-
-  // Record the batch
   const batchNumber = String(Date.now()).slice(-6);
   const { data: batchRow } = await admin
     .from('movein_batches')
@@ -154,9 +158,7 @@ export async function POST(request: NextRequest) {
     buffer.byteOffset,
     buffer.byteOffset + buffer.byteLength,
   ) as ArrayBuffer;
-  const filename = singleJEId
-    ? `movein-${batchNumber}.dat`
-    : `movein-batch-${batchNumber}.dat`;
+  const filename = `movein-${company.name.replace(/[^a-zA-Z0-9]/g, '_')}-${batchNumber}.dat`;
 
   return new NextResponse(ab, {
     status: 200,

@@ -1,16 +1,11 @@
 import Link from 'next/link';
 import {
   LayoutDashboard,
-  Inbox,
-  FileEdit,
   Building2,
   HelpCircle,
 } from 'lucide-react';
 import { requireUser } from '@/lib/auth';
-import {
-  listCompaniesForUser,
-  getCurrentCompany,
-} from '@/lib/current-company';
+import { listCompaniesForUser } from '@/lib/current-company';
 import { CompanySwitcher } from './company-switcher';
 import { UserMenu } from './user-menu';
 import { BrandLogo } from '@/components/brand-logo';
@@ -18,7 +13,6 @@ import { BrandLogo } from '@/components/brand-logo';
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
   const companies = await listCompaniesForUser(user.id, user.email);
-  const current = await getCurrentCompany(user.id, user.email);
 
   return (
     <div className="min-h-screen flex flex-col bg-ink-50">
@@ -31,8 +25,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <nav className="flex items-center gap-1 text-sm">
               <NavLink href="/dashboard" icon={LayoutDashboard}>ראשי</NavLink>
               <NavLink href="/dashboard/companies" icon={Building2}>החברות שלי</NavLink>
-              <NavLink href="/dashboard/invoices" icon={Inbox}>חשבוניות</NavLink>
-              <NavLink href="/dashboard/journal-entries" icon={FileEdit}>פקודות יומן</NavLink>
               <NavLink href="/dashboard/help" icon={HelpCircle}>עזרה</NavLink>
             </nav>
           </div>
@@ -40,7 +32,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
             {companies.length > 0 && (
               <CompanySwitcher
                 companies={companies.map((c) => ({ id: c.id, name: c.name }))}
-                currentId={current?.id ?? null}
               />
             )}
             <UserMenu email={user.email} isAdmin={user.role === 'admin'} />

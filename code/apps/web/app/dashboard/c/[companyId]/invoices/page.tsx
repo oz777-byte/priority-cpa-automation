@@ -1,12 +1,12 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
+import { Inbox, FileEdit } from 'lucide-react';
 import {
   CanonicalInvoiceSchema,
   type CanonicalInvoice,
 } from '@priority-cpa/invoice-schema';
 import { validateInvoice } from '@priority-cpa/je-validator';
 import { requireUser } from '@/lib/auth';
-import { getCurrentCompany } from '@/lib/current-company';
+import { loadCompanyForUser } from '@/lib/company-context';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { buildValidationContext, type CompanySettings } from '@/lib/company-config';
 
@@ -19,12 +19,15 @@ interface DBInvoice {
   created_at: string;
 }
 
-export default async function InvoicesPage() {
+export default async function CompanyInvoicesPage({
+  params,
+}: {
+  params: { companyId: string };
+}) {
   const me = await requireUser();
-  const company = await getCurrentCompany(me.id, me.email);
-  if (!company) redirect('/dashboard/companies');
-
+  const company = await loadCompanyForUser(me.id, me.email, params.companyId);
   const admin = getAdminClient();
+
   const { data: rows } = await admin
     .from('invoices_inbox')
     .select('id, status, canonical, created_at')
@@ -32,8 +35,6 @@ export default async function InvoicesPage() {
     .order('created_at', { ascending: false });
 
   const settings = (company.settings ?? {}) as CompanySettings;
-
-  // Pre-fetch supplier codes for validation context
   const { data: suppliers } = await admin
     .from('suppliers')
     .select('internal_code')
@@ -44,12 +45,7 @@ export default async function InvoicesPage() {
     settings.vat_input_account ?? '205-2',
     ...supplierCodes,
   ]);
-  const ctx = buildValidationContext(
-    company.id,
-    settings,
-    knownAccounts,
-    supplierCodes,
-  );
+  const ctx = buildValidationContext(company.id, settings, knownAccounts, supplierCodes);
 
   const invoices = ((rows ?? []) as DBInvoice[]).map((row) => {
     const parsed = CanonicalInvoiceSchema.safeParse(row.canonical);
@@ -61,26 +57,28 @@ export default async function InvoicesPage() {
   });
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="space-y-5">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-ink-900">תור החשבוניות</h1>
-          <p className="text-ink-600 mt-1 text-sm">
-            חברה: {company.name}
+          <h2 className="text-lg font-semibold text-ink-900">חשבוניות</h2>
+          <p className="text-sm text-ink-600 mt-0.5">
+            כל החשבוניות של {company.name}. כדי לערוך פקודת יומן ולייצא, עבור
+            ל"פקודות יומן".
           </p>
         </div>
         <Link
-          href="/dashboard/journal-entries"
-          className="px-4 py-2 bg-accent-600 text-white rounded-lg text-sm hover:bg-accent-500"
+          href={`/dashboard/c/${company.id}/journal-entries`}
+          className="flex items-center gap-1.5 text-sm text-accent-600 hover:underline"
         >
-          לעריכת פקודות יומן
+          <FileEdit size={14} />
+          לעורך פקודות יומן
         </Link>
       </div>
 
       {invoices.length === 0 ? (
-        <EmptyState companyName={company.name} />
+        <EmptyState companyId={company.id} />
       ) : (
-        <div className="bg-white border border-ink-200 rounded-xl overflow-hidden">
+        <div className="border border-ink-200 rounded-xl overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-ink-50 border-b border-ink-200 text-ink-600">
               <tr>
@@ -94,7 +92,12 @@ export default async function InvoicesPage() {
             </thead>
             <tbody>
               {invoices.map((inv) => (
-                <Row key={inv.id} inv={inv} ctx={ctx} />
+                <Row
+                  key={inv.id}
+                  inv={inv}
+                  companyId={company.id}
+                  ctx={ctx}
+                />
               ))}
             </tbody>
           </table>
@@ -104,19 +107,23 @@ export default async function InvoicesPage() {
   );
 }
 
-function EmptyState({ companyName }: { companyName: string }) {
+function EmptyState({ companyId }: { companyId: string }) {
+  void companyId;
   return (
-    <div className="bg-white border border-ink-200 rounded-xl p-8 text-center space-y-3">
-      <h2 className="text-lg font-semibold text-ink-900">אין חשבוניות עדיין</h2>
-      <p className="text-sm text-ink-600">
-        כדי לראות איך המערכת עובדת מקצה לקצה, אפשר לטעון 2 חשבוניות לדוגמה
-        (וירטהיים וצרפתי) ל-{companyName}.
+    <div className="bg-ink-50/60 border border-ink-200 rounded-xl p-8 text-center space-y-3">
+      <div className="w-12 h-12 mx-auto rounded-full bg-white flex items-center justify-center">
+        <Inbox size={20} className="text-ink-400" />
+      </div>
+      <h3 className="font-semibold text-ink-900">אין חשבוניות לחברה זו</h3>
+      <p className="text-sm text-ink-600 max-w-md mx-auto">
+        לטעינת חשבוניות לדוגמה — עבור ל"החברות שלי" ולחץ על "טעינת חשבוניות POC"
+        ליד החברה.
       </p>
       <Link
         href="/dashboard/companies"
-        className="inline-block px-4 py-2 bg-accent-600 text-white rounded-lg text-sm"
+        className="inline-block px-4 py-2 bg-accent-600 text-white rounded-lg text-sm hover:bg-accent-500"
       >
-        עבור לניהול חברות לטעינת POC
+        לעמוד החברות
       </Link>
     </div>
   );
@@ -124,32 +131,28 @@ function EmptyState({ companyName }: { companyName: string }) {
 
 function Row({
   inv,
+  companyId,
   ctx,
 }: {
   inv: { id: string; status: string; canonical: CanonicalInvoice | null };
+  companyId: string;
   ctx: ReturnType<typeof buildValidationContext>;
 }) {
   if (!inv.canonical) {
     return (
       <tr className="border-b border-ink-100 last:border-0">
-        <td colSpan={6} className="p-3 text-red-700">
-          חשבונית פגומה — לא ניתן לפענח
-        </td>
+        <td colSpan={6} className="p-3 text-red-700">חשבונית פגומה</td>
       </tr>
     );
   }
   const c = inv.canonical;
   const result = validateInvoice(c, ctx);
-  const status = inv.status === 'approved'
-    ? 'approved'
-    : inv.status === 'exported'
-      ? 'exported'
-      : !result.passed
-        ? 'fail'
-        : result.warnings.length > 0
-          ? 'warn'
-          : 'pass';
-
+  const status =
+    inv.status === 'exported' ? 'exported'
+      : inv.status === 'approved' ? 'approved'
+      : !result.passed ? 'fail'
+      : result.warnings.length > 0 ? 'warn'
+      : 'pass';
   return (
     <tr className="border-b border-ink-100 last:border-0">
       <td className="p-3 text-ink-900">{c.supplier.name}</td>
@@ -159,7 +162,7 @@ function Row({
       <td className="p-3"><StatusPill status={status} /></td>
       <td className="p-3">
         <Link
-          href={`/dashboard/invoices/${inv.id}`}
+          href={`/dashboard/c/${companyId}/invoices/${inv.id}`}
           className="text-accent-600 hover:underline"
         >
           פתח

@@ -69,7 +69,7 @@ async function selectAndGo(formData: FormData) {
   const id = formData.get('companyId');
   if (typeof id !== 'string') return;
   await selectCompanyAction(id);
-  redirect('/dashboard/journal-entries');
+  redirect(`/dashboard/c/${id}`);
 }
 
 export default async function DashboardHomePage() {
