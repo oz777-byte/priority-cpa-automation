@@ -1,14 +1,12 @@
 import Link from 'next/link';
 import { Inbox, FileEdit, Plus } from 'lucide-react';
-import {
-  CanonicalInvoiceSchema,
-  type CanonicalInvoice,
-} from '@priority-cpa/invoice-schema';
+import { CanonicalInvoiceSchema } from '@priority-cpa/invoice-schema';
 import { validateInvoice } from '@priority-cpa/je-validator';
 import { requireUser } from '@/lib/auth';
 import { loadCompanyForUser } from '@/lib/company-context';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { buildValidationContext, type CompanySettings } from '@/lib/company-config';
+import { InvoicesTable, type InvoiceListRow, type InvoiceStatus } from './invoices-table';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,23 +45,41 @@ export default async function CompanyInvoicesPage({
   ]);
   const ctx = buildValidationContext(company.id, settings, knownAccounts, supplierCodes);
 
-  const invoices = ((rows ?? []) as DBInvoice[]).map((row) => {
-    const parsed = CanonicalInvoiceSchema.safeParse(row.canonical);
-    return {
-      id: row.id,
-      status: row.status,
-      canonical: parsed.success ? parsed.data : null,
-    };
-  });
+  const tableRows: InvoiceListRow[] = ((rows ?? []) as DBInvoice[])
+    .map((row) => {
+      const parsed = CanonicalInvoiceSchema.safeParse(row.canonical);
+      if (!parsed.success) return null;
+      const c = parsed.data;
+      const result = validateInvoice(c, ctx);
+      const status: InvoiceStatus =
+        row.status === 'exported'
+          ? 'exported'
+          : row.status === 'approved'
+            ? 'approved'
+            : !result.passed
+              ? 'fail'
+              : result.warnings.length > 0
+                ? 'warn'
+                : 'pass';
+      return {
+        id: row.id,
+        supplierName: c.supplier.name,
+        invoiceNumber: c.invoice.number,
+        date: c.invoice.date,
+        totalIls: c.totals.total,
+        status,
+      } satisfies InvoiceListRow;
+    })
+    .filter((r): r is InvoiceListRow => r !== null);
 
   return (
     <div className="space-y-5">
-      <div className="flex items-end justify-between">
+      <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-lg font-semibold text-ink-900">חשבוניות</h2>
           <p className="text-sm text-ink-600 mt-0.5">
             כל החשבוניות של {company.name}. כדי לערוך פקודת יומן ולייצא, עבור
-            ל"פקודות יומן".
+            ל&quot;פקודות יומן&quot;.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -84,42 +100,19 @@ export default async function CompanyInvoicesPage({
         </div>
       </div>
 
-      {invoices.length === 0 ? (
-        <EmptyState companyId={company.id} />
-      ) : (
-        <div className="border border-ink-200 rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-ink-50 border-b border-ink-200 text-ink-600">
-              <tr>
-                <th className="text-right p-3 font-medium">ספק</th>
-                <th className="text-right p-3 font-medium">מס׳ חשבונית</th>
-                <th className="text-right p-3 font-medium">תאריך</th>
-                <th className="text-right p-3 font-medium">סכום</th>
-                <th className="text-right p-3 font-medium">סטטוס</th>
-                <th className="text-right p-3 font-medium"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {invoices.map((inv) => (
-                <Row
-                  key={inv.id}
-                  inv={inv}
-                  companyId={company.id}
-                  ctx={ctx}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <InvoicesTable
+        rows={tableRows}
+        companyId={company.id}
+        emptyState={<EmptyState companyId={company.id} />}
+      />
     </div>
   );
 }
 
 function EmptyState({ companyId }: { companyId: string }) {
   return (
-    <div className="bg-ink-50/60 border border-ink-200 rounded-xl p-8 text-center space-y-4">
-      <div className="w-12 h-12 mx-auto rounded-full bg-white flex items-center justify-center">
+    <div className="text-center space-y-4 py-4">
+      <div className="w-12 h-12 mx-auto rounded-full bg-ink-50 flex items-center justify-center">
         <Inbox size={20} className="text-ink-400" />
       </div>
       <div className="space-y-1">
@@ -145,67 +138,5 @@ function EmptyState({ companyId }: { companyId: string }) {
         </Link>
       </div>
     </div>
-  );
-}
-
-function Row({
-  inv,
-  companyId,
-  ctx,
-}: {
-  inv: { id: string; status: string; canonical: CanonicalInvoice | null };
-  companyId: string;
-  ctx: ReturnType<typeof buildValidationContext>;
-}) {
-  if (!inv.canonical) {
-    return (
-      <tr className="border-b border-ink-100 last:border-0">
-        <td colSpan={6} className="p-3 text-red-700">חשבונית פגומה</td>
-      </tr>
-    );
-  }
-  const c = inv.canonical;
-  const result = validateInvoice(c, ctx);
-  const status =
-    inv.status === 'exported' ? 'exported'
-      : inv.status === 'approved' ? 'approved'
-      : !result.passed ? 'fail'
-      : result.warnings.length > 0 ? 'warn'
-      : 'pass';
-  return (
-    <tr className="border-b border-ink-100 last:border-0">
-      <td className="p-3 text-ink-900">{c.supplier.name}</td>
-      <td className="p-3 text-ink-700" dir="ltr">{c.invoice.number}</td>
-      <td className="p-3 text-ink-700" dir="ltr">{c.invoice.date}</td>
-      <td className="p-3 text-ink-900 font-medium">{c.totals.total.toFixed(2)} ₪</td>
-      <td className="p-3"><StatusPill status={status} /></td>
-      <td className="p-3">
-        <Link
-          href={`/dashboard/c/${companyId}/invoices/${inv.id}`}
-          className="text-accent-600 hover:underline"
-        >
-          פתח
-        </Link>
-      </td>
-    </tr>
-  );
-}
-
-function StatusPill({
-  status,
-}: {
-  status: 'pass' | 'warn' | 'fail' | 'approved' | 'exported';
-}) {
-  const config = {
-    pass: { bg: 'bg-green-100', text: 'text-green-800', label: 'מוכן' },
-    warn: { bg: 'bg-amber-100', text: 'text-amber-800', label: 'בדיקה' },
-    fail: { bg: 'bg-red-100', text: 'text-red-800', label: 'חסום' },
-    approved: { bg: 'bg-emerald-100', text: 'text-emerald-800', label: 'אושר' },
-    exported: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'יוצא' },
-  }[status];
-  return (
-    <span className={`inline-block px-2 py-1 rounded text-xs ${config.bg} ${config.text}`}>
-      {config.label}
-    </span>
   );
 }
