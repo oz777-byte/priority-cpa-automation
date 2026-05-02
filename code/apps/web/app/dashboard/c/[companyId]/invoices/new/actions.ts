@@ -16,10 +16,20 @@ const Input = z.object({
   supplierInternalCode: z.string().min(1).max(8),
   invoiceNumber: z.string().min(1).max(20),
   invoiceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'תאריך חייב להיות בפורמט YYYY-MM-DD'),
+  valueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   currency: CurrencySchema.default('ILS'),
   subtotal: z.coerce.number().nonnegative(),
   total: z.coerce.number().nonnegative(),
   allocationNumber: z.string().optional(),
+  // Advanced — drives JE constructor scenario detection
+  isCreditNote: z
+    .string()
+    .optional()
+    .transform((v) => v === 'on' || v === 'true'),
+  paymentMethod: z.enum(['credit', 'cash', 'card', 'transfer']).optional(),
+  withholdingPercent: z.coerce.number().min(0).max(100).optional(),
+  mixedDeductionCategory: z.enum(['vehicle', 'meals', 'non_deductible']).optional(),
+  fxRate: z.coerce.number().positive().optional(),
 });
 
 export interface CreateInvoiceResult {
@@ -42,10 +52,16 @@ export async function createInvoiceManuallyAction(
     supplierInternalCode: formData.get('supplierInternalCode'),
     invoiceNumber: formData.get('invoiceNumber'),
     invoiceDate: formData.get('invoiceDate'),
+    valueDate: formData.get('valueDate') || undefined,
     currency: formData.get('currency') ?? 'ILS',
     subtotal: formData.get('subtotal'),
     total: formData.get('total'),
     allocationNumber: formData.get('allocationNumber') || undefined,
+    isCreditNote: (formData.get('isCreditNote') as string | null) ?? undefined,
+    paymentMethod: formData.get('paymentMethod') || undefined,
+    withholdingPercent: formData.get('withholdingPercent') || undefined,
+    mixedDeductionCategory: formData.get('mixedDeductionCategory') || undefined,
+    fxRate: formData.get('fxRate') || undefined,
   });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.errors[0]?.message ?? 'נתונים לא תקינים' };
@@ -100,8 +116,16 @@ export async function createInvoiceManuallyAction(
     invoice: {
       number: data.invoiceNumber,
       date: data.invoiceDate,
+      ...(data.valueDate ? { value_date: data.valueDate } : {}),
       currency: data.currency,
       allocation_number: data.allocationNumber ?? null,
+      ...(data.isCreditNote ? { is_credit_note: true } : {}),
+      ...(data.paymentMethod ? { payment_method: data.paymentMethod } : {}),
+      ...(data.withholdingPercent ? { withholding_percent: data.withholdingPercent } : {}),
+      ...(data.mixedDeductionCategory
+        ? { mixed_deduction_category: data.mixedDeductionCategory }
+        : {}),
+      ...(data.fxRate ? { fx_rate: data.fxRate } : {}),
     },
     supplier: {
       name: data.supplierName,

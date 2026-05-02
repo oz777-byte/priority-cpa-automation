@@ -28,6 +28,10 @@ export interface JELine {
   account: string;
   debit: number;
   credit: number;
+  /** Foreign-currency debit amount (only for FOREIGN_CURRENCY scenario). */
+  debitFx?: number;
+  /** Foreign-currency credit amount (only for FOREIGN_CURRENCY scenario). */
+  creditFx?: number;
   details?: string;
   costCenter?: string;
 }

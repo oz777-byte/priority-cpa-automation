@@ -78,6 +78,14 @@ export const InvoiceHeaderSchema = z
     payment_terms: z.string().optional(),
     is_credit_note: z.boolean().optional(),
     payment_method: z.enum(['credit', 'cash', 'card', 'transfer']).optional(),
+    /** Withholding-tax percent (0-100). Triggers WITH_WITHHOLDING scenario. */
+    withholding_percent: z.number().min(0).max(100).optional(),
+    /** Mixed-deduction category (Israeli law). Triggers MIXED_DEDUCTION scenario. */
+    mixed_deduction_category: z.enum(['vehicle', 'meals', 'non_deductible']).optional(),
+    /** Cost center / project tag. Triggers WITH_COST_CENTER scenario. */
+    cost_center: z.string().optional(),
+    /** FX rate for non-ILS currencies (units of ILS per unit of foreign currency). */
+    fx_rate: z.number().positive().optional(),
   })
   .passthrough();
 export type InvoiceHeader = z.infer<typeof InvoiceHeaderSchema>;

@@ -84,24 +84,34 @@ export function detectScenario(
     overlays.push('WITH_DISCOUNT');
   }
 
+  // Merge invoice-level fields with caller context (context wins).
+  const withholding = context.withholdingPercent ?? invoice.invoice.withholding_percent;
+  const mixedCategory =
+    context.mixedDeductionCategory ?? invoice.invoice.mixed_deduction_category;
+  const costCenter = context.costCenter ?? invoice.invoice.cost_center;
+
   // Primary picks (most specific first)
-  if (context.withholdingPercent && context.withholdingPercent > 0) {
-    return { scenario: 'WITH_WITHHOLDING', reason: 'withholdingPercent provided', overlays };
+  if (withholding && withholding > 0) {
+    return {
+      scenario: 'WITH_WITHHOLDING',
+      reason: `withholding_percent=${withholding}`,
+      overlays,
+    };
   }
-  if (context.mixedDeductionCategory && context.mixedDeductionCategory !== 'non_deductible') {
+  if (mixedCategory && mixedCategory !== 'non_deductible') {
     return {
       scenario: 'MIXED_DEDUCTION',
-      reason: `mixedDeductionCategory=${context.mixedDeductionCategory}`,
+      reason: `mixed_deduction_category=${mixedCategory}`,
       overlays,
     };
   }
   if (context.hasMultipleExpenseCategories) {
     return { scenario: 'MULTI_EXPENSE', reason: 'multiple expense categories signal', overlays };
   }
-  if (context.costCenter) {
+  if (costCenter) {
     return {
       scenario: 'WITH_COST_CENTER',
-      reason: `costCenter=${context.costCenter}`,
+      reason: `cost_center=${costCenter}`,
       overlays,
     };
   }

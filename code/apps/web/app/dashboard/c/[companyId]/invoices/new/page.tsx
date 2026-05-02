@@ -96,6 +96,78 @@ export default async function NewInvoicePage({
           </p>
         </Section>
 
+        <details className="group">
+          <summary className="cursor-pointer text-sm font-medium text-accent-600 hover:text-accent-500 select-none flex items-center gap-1">
+            <span className="transition group-open:rotate-90 inline-block">▸</span>
+            הגדרות מתקדמות (תרחישים מיוחדים)
+          </summary>
+          <div className="mt-4 space-y-4">
+            <Section title="חריגות בחשבונית">
+              <CheckboxField
+                name="isCreditNote"
+                label="זוהי חשבונית זיכוי / החזר"
+                hint="המערכת תהפוך את כיווני חובה/זכות"
+              />
+              <SelectField
+                name="paymentMethod"
+                label='שיטת תשלום'
+                options={[
+                  { value: '', label: 'תשלום שוטף לספק' },
+                  { value: 'cash', label: 'מזומן' },
+                  { value: 'card', label: 'אשראי' },
+                  { value: 'transfer', label: 'העברה בנקאית מיידית' },
+                ]}
+                hint='בחר אם החשבונית שולמה מיידית — JE יזקוף לחשבון התשלום במקום לספק'
+              />
+              <Field
+                name="valueDate"
+                label='תאריך ערך (אם שונה מתאריך חשבונית)'
+                type="date"
+                dir="ltr"
+                hint='למקרה של חשבונית מתקופה קודמת שנכנסה למערכת בתאריך אחר'
+              />
+            </Section>
+
+            <Section title='ניכוי במקור (לספקי שירות)'>
+              <Field
+                name="withholdingPercent"
+                label='אחוז ניכוי במקור (%)'
+                type="number"
+                step="0.01"
+                placeholder='לדוגמה: 5'
+                dir="ltr"
+                hint='אם ספק זה חייב ניכוי במקור — JE ייצור 4 שורות עם זכות לרשות המסים'
+              />
+            </Section>
+
+            <Section title='מע"מ מעורב (לפי חוק המס)'>
+              <SelectField
+                name="mixedDeductionCategory"
+                label='קטגוריית הוצאה'
+                options={[
+                  { value: '', label: 'מנוכה במלואו (סטנדרטי)' },
+                  { value: 'vehicle', label: 'רכב — 2/3 מנוכה' },
+                  { value: 'meals', label: 'אש"ל / מתנות — 1/4 מנוכה' },
+                  { value: 'non_deductible', label: 'לא מנוכה כלל' },
+                ]}
+                hint='המערכת תפצל את ה-JE לחלק מנוכה ולחלק לא-מנוכה'
+              />
+            </Section>
+
+            <Section title='מטבע חוץ'>
+              <Field
+                name="fxRate"
+                label='שער חליפין (₪ ליחידת מטבע)'
+                type="number"
+                step="0.0001"
+                placeholder='לדוגמה: 3.7'
+                dir="ltr"
+                hint='נדרש כשהמטבע אינו ILS. שערי בנק ישראל אוטומטיים — בקרוב'
+              />
+            </Section>
+          </div>
+        </details>
+
         <div className="flex justify-end gap-3 pt-3 border-t border-ink-100">
           <Link
             href={`/dashboard/c/${company.id}/invoices`}
@@ -146,6 +218,7 @@ function Field({
   dir,
   defaultValue,
   required,
+  hint,
 }: {
   name: string;
   label: string;
@@ -155,6 +228,7 @@ function Field({
   dir?: 'ltr' | 'rtl';
   defaultValue?: string;
   required?: boolean;
+  hint?: string;
 }) {
   return (
     <div>
@@ -172,21 +246,53 @@ function Field({
         defaultValue={defaultValue}
         className="w-full px-3 py-2 border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500"
       />
+      {hint && <div className="text-xs text-ink-400 mt-1">{hint}</div>}
     </div>
   );
 }
+
+function CheckboxField({
+  name,
+  label,
+  hint,
+}: {
+  name: string;
+  label: string;
+  hint?: string;
+}) {
+  return (
+    <div>
+      <label className="flex items-center gap-2 text-sm text-ink-800 cursor-pointer">
+        <input
+          type="checkbox"
+          name={name}
+          className="rounded border-ink-300 text-accent-600 focus:ring-accent-500"
+        />
+        <span>{label}</span>
+      </label>
+      {hint && <div className="text-xs text-ink-400 mt-1 mr-6">{hint}</div>}
+    </div>
+  );
+}
+
+type SelectOption = string | { value: string; label: string };
 
 function SelectField({
   name,
   label,
   options,
   defaultValue,
+  hint,
 }: {
   name: string;
   label: string;
-  options: string[];
+  options: SelectOption[];
   defaultValue?: string;
+  hint?: string;
 }) {
+  const normalized = options.map((o) =>
+    typeof o === 'string' ? { value: o, label: o } : o,
+  );
   return (
     <div>
       <label className="block text-sm font-medium text-ink-800 mb-1">{label}</label>
@@ -195,10 +301,11 @@ function SelectField({
         defaultValue={defaultValue}
         className="w-full px-3 py-2 border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500"
       >
-        {options.map((o) => (
-          <option key={o} value={o}>{o}</option>
+        {normalized.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
         ))}
       </select>
+      {hint && <div className="text-xs text-ink-400 mt-1">{hint}</div>}
     </div>
   );
 }

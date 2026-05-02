@@ -80,6 +80,9 @@ export async function ensureDraftJEsForCompany(
           document_date: record.documentDate,
           value_date: record.valueDate,
           currency: record.currency,
+          ...(canonical.invoice.fx_rate
+            ? { fx_rate: canonical.invoice.fx_rate }
+            : {}),
           details: record.details,
           created_by: userId,
           ...(result.warnings.length > 0
@@ -102,6 +105,8 @@ export async function ensureDraftJEsForCompany(
         account: l.account,
         debit: l.debit,
         credit: l.credit,
+        ...(l.debitFx ? { debit_fx: l.debitFx } : {}),
+        ...(l.creditFx ? { credit_fx: l.creditFx } : {}),
         ...(l.details ? { details: l.details } : {}),
       }));
       await admin.from('journal_entry_lines').insert(linesPayload);

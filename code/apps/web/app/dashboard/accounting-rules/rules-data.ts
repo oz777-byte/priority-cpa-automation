@@ -186,7 +186,7 @@ export const RULES: AccountingRule[] = [
     code: 'WITH_WITHHOLDING',
     title: 'ניכוי מס במקור',
     icon: Percent,
-    status: 'coming-soon',
+    status: 'auto-with-warning',
     oneLiner: 'ספק שירותים שיש לו אחוז ניכוי קבוע — חלק מהתשלום הולך לרשות המסים.',
     description:
       'כשמשלמים לספק שירותים מסוימים (יועצים, נותני שירות, אומנים) חובה לנכות אחוז במקור ולהעבירו לרשות המסים. הספק מקבל פחות, רשות המסים מקבלת את ההפרש.',
@@ -265,7 +265,7 @@ export const RULES: AccountingRule[] = [
     code: 'MIXED_DEDUCTION',
     title: 'מע"מ מעורב',
     icon: Percent,
-    status: 'coming-soon',
+    status: 'auto-with-warning',
     oneLiner: 'הוצאה שחלקה מנוכה וחלקה לא — לפי חוקי המס הישראליים.',
     description:
       'חוק המס הישראלי מאפשר ניכוי חלקי של מע"מ בקטגוריות מסוימות: רכב 2/3, אש"ל 1/4. החלק שלא מנוכה הופך להוצאה (אין החזר).',
@@ -296,7 +296,7 @@ export const RULES: AccountingRule[] = [
     code: 'FOREIGN_CURRENCY',
     title: 'חשבונית במטבע חוץ',
     icon: Globe,
-    status: 'coming-soon',
+    status: 'auto-with-warning',
     oneLiner: 'חשבונית ב-USD/EUR/GBP — דורש המרה לפי שער יומי + ניהול הפרשי שער.',
     description:
       'חשבונית במט"ח דורשת רישום כפול: גם ב-₪ (לפי שער יומי של בנק ישראל) וגם במטבע המקור. הפרשי שער בין הרישום לתשלום מהווים רווח/הפסד מטבע.',

@@ -119,24 +119,107 @@ describe('constructJE — overlays', () => {
   });
 });
 
-describe('constructJE — complex scenarios fall back to STANDARD with warning', () => {
-  for (const scenario of ['MULTI_EXPENSE', 'WITH_COST_CENTER', 'MIXED_DEDUCTION', 'FOREIGN_CURRENCY', 'WITH_WITHHOLDING'] as const) {
+describe('constructJE — still-stubbed complex scenarios fall back to STANDARD', () => {
+  for (const scenario of ['MULTI_EXPENSE', 'WITH_COST_CENTER'] as const) {
     it(`${scenario}: returns STANDARD-shaped JE + clear warning`, () => {
       const detector =
-        scenario === 'FOREIGN_CURRENCY' ? { /* triggered via currency */ }
-        : scenario === 'WITH_WITHHOLDING' ? { withholdingPercent: 5 }
-        : scenario === 'MIXED_DEDUCTION' ? { mixedDeductionCategory: 'vehicle' as const }
-        : scenario === 'WITH_COST_CENTER' ? { costCenter: 'PROJ-A' }
-        : scenario === 'MULTI_EXPENSE' ? { hasMultipleExpenseCategories: true }
-        : {};
-      const invoice = scenario === 'FOREIGN_CURRENCY'
-        ? inv({ currency: 'USD' })
-        : inv();
-      const r = constructJE(invoice, config, detector);
+        scenario === 'WITH_COST_CENTER' ? { costCenter: 'PROJ-A' }
+        : { hasMultipleExpenseCategories: true };
+      const r = constructJE(inv(), config, detector);
       expect(r.primaryScenario).toBe(scenario);
       expect(r.warnings.length).toBeGreaterThan(0);
       expect(r.records).toHaveLength(1);
       expect(balanced(r.records[0]!)).toBe(true);
     });
   }
+});
+
+describe('constructJE — WITH_WITHHOLDING', () => {
+  it('builds 4 lines with supplier credit reduced by withholding', () => {
+    const r = constructJE(
+      inv({}, { subtotal: 1000, total: 1180 }),
+      { ...config, withholdingAccount: '175-0' },
+      { withholdingPercent: 5 },
+    );
+    expect(r.primaryScenario).toBe('WITH_WITHHOLDING');
+    const lines = r.records[0]!.lines;
+    expect(lines).toHaveLength(4);
+    expect(lines.find((l) => l.account === '502-0')?.debit).toBe(1000);
+    expect(lines.find((l) => l.account === '205-2')?.debit).toBe(180);
+    expect(lines.find((l) => l.account === '200087')?.credit).toBe(1130);
+    expect(lines.find((l) => l.account === '175-0')?.credit).toBe(50);
+    expect(balanced(r.records[0]!)).toBe(true);
+  });
+
+  it('warns when withholdingAccount is not configured', () => {
+    const r = constructJE(inv(), config, { withholdingPercent: 5 });
+    expect(r.warnings.some((w) => w.includes('רשות המסים'))).toBe(true);
+  });
+});
+
+describe('constructJE — MIXED_DEDUCTION', () => {
+  it('vehicle (2/3): 2 balanced records, deductible + non-deductible', () => {
+    const r = constructJE(
+      inv({}, { subtotal: 1000, total: 1180 }),
+      { ...config, nonDeductibleAccount: '502-1' },
+      { mixedDeductionCategory: 'vehicle' },
+    );
+    expect(r.primaryScenario).toBe('MIXED_DEDUCTION');
+    expect(r.records).toHaveLength(2);
+
+    const ded = r.records[0]!;
+    expect(ded.lines.find((l) => l.account === '502-0')?.debit).toBe(666.67);
+    expect(ded.lines.find((l) => l.account === '205-2')?.debit).toBe(120);
+    expect(ded.lines.find((l) => l.account === '200087')?.credit).toBe(786.67);
+    expect(balanced(ded)).toBe(true);
+
+    const nd = r.records[1]!;
+    expect(nd.lines.find((l) => l.account === '502-1')?.debit).toBeCloseTo(393.33, 2);
+    expect(nd.lines.find((l) => l.account === '200087')?.credit).toBeCloseTo(393.33, 2);
+    expect(balanced(nd)).toBe(true);
+  });
+
+  it('meals (1/4)', () => {
+    const r = constructJE(
+      inv({}, { subtotal: 100, total: 118 }),
+      { ...config, nonDeductibleAccount: '502-1' },
+      { mixedDeductionCategory: 'meals' },
+    );
+    const ded = r.records[0]!;
+    expect(ded.lines.find((l) => l.account === '502-0')?.debit).toBe(25);
+    expect(ded.lines.find((l) => l.account === '205-2')?.debit).toBe(4.5);
+    expect(balanced(ded)).toBe(true);
+  });
+
+  it('shares reference1 across records', () => {
+    const r = constructJE(
+      inv({}, { subtotal: 1000, total: 1180 }),
+      { ...config, nonDeductibleAccount: '502-1' },
+      { mixedDeductionCategory: 'vehicle' },
+    );
+    expect(r.records[0]!.reference1).toBe(r.records[1]!.reference1);
+  });
+});
+
+describe('constructJE — FOREIGN_CURRENCY', () => {
+  it('USD invoice with rate 3.7 fills both ILS and FX amounts per line', () => {
+    const r = constructJE(
+      inv({ currency: 'USD', fx_rate: 3.7 }, { subtotal: 100, total: 118 }),
+      config,
+    );
+    expect(r.primaryScenario).toBe('FOREIGN_CURRENCY');
+    const lines = r.records[0]!.lines;
+    expect(lines.find((l) => l.account === '502-0')?.debit).toBe(370);
+    expect(lines.find((l) => l.account === '502-0')?.debitFx).toBe(100);
+    expect(lines.find((l) => l.account === '205-2')?.debit).toBe(66.6);
+    expect(lines.find((l) => l.account === '205-2')?.debitFx).toBe(18);
+    expect(lines.find((l) => l.account === '200087')?.credit).toBe(436.6);
+    expect(lines.find((l) => l.account === '200087')?.creditFx).toBe(118);
+    expect(balanced(r.records[0]!)).toBe(true);
+  });
+
+  it('warns when fx_rate is missing', () => {
+    const r = constructJE(inv({ currency: 'USD' }, { subtotal: 100, total: 118 }), config);
+    expect(r.warnings.some((w) => w.includes('שער חליפין'))).toBe(true);
+  });
 });
