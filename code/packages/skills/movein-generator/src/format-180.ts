@@ -40,6 +40,65 @@ function roundCents(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+/**
+ * Raw 180-format record input — direct field-level control.
+ * Use when building records from edited JE rows (post-CPA review).
+ */
+export interface MoveInRecordInput {
+  transactionType: string;                       // 1-3
+  reference1: string | number;                   // 4-8 — last 5 digits used
+  reference2?: string | number | undefined;      // 15-19 — defaults to "    0"
+  documentDate: string;                          // 9-14 — ISO YYYY-MM-DD
+  valueDate: string;                             // 20-25 — ISO YYYY-MM-DD
+  currency: string;                              // 26-28
+  details: string;                               // 29-50 — truncated/padded to 22
+  dr1Account: string;                            // 51-58
+  dr2Account?: string | undefined;               // 59-66
+  cr1Account: string;                            // 67-74
+  cr2Account?: string | undefined;               // 75-82
+  dr1Amount: number;                             // 83-94
+  dr2Amount?: number | undefined;                // 95-106
+  cr1Amount: number;                             // 107-118
+  cr2Amount?: number | undefined;                // 119-130
+  dr1AmountFx?: number | undefined;              // 131-142
+  dr2AmountFx?: number | undefined;              // 143-154
+  cr1AmountFx?: number | undefined;              // 155-166
+  cr2AmountFx?: number | undefined;              // 167-178
+}
+
+export function buildRawRecord(input: MoveInRecordInput): string {
+  const fields: readonly string[] = [
+    alphaLeft(input.transactionType, 3),
+    numericLong(input.reference1, 5),
+    toDdmmyy(input.documentDate),
+    numericLong(input.reference2 ?? 0, 5),
+    toDdmmyy(input.valueDate),
+    alphaLeft(input.currency, 3),
+    alphaLeft(input.details, 22),
+    alphaLeft(input.dr1Account, 8),
+    alphaLeft(input.dr2Account ?? '', 8),
+    alphaLeft(input.cr1Account, 8),
+    alphaLeft(input.cr2Account ?? '', 8),
+    decimal92(input.dr1Amount),
+    decimal92(input.dr2Amount ?? 0),
+    decimal92(input.cr1Amount),
+    decimal92(input.cr2Amount ?? 0),
+    decimal92(input.dr1AmountFx ?? 0),
+    decimal92(input.dr2AmountFx ?? 0),
+    decimal92(input.cr1AmountFx ?? 0),
+    decimal92(input.cr2AmountFx ?? 0),
+  ];
+  const record = fields.join('');
+  if (record.length !== RECORD_LENGTH) {
+    throw new Error(`record length ${record.length} ≠ ${RECORD_LENGTH}`);
+  }
+  return record;
+}
+
+/**
+ * High-level helper: build a record directly from a canonical invoice + a
+ * company-level config. Used when no manual JE editing is required.
+ */
 export function buildRecord(rawInvoice: CanonicalInvoice, rawConfig: MoveInConfig): string {
   const invoice = CanonicalInvoiceSchema.parse(rawInvoice);
   const config = MoveInConfigSchema.parse(rawConfig);
@@ -52,32 +111,20 @@ export function buildRecord(rawInvoice: CanonicalInvoice, rawConfig: MoveInConfi
   const isoDate = invoice.invoice.date;
   const details = `${config.detailsPrefix} ${invoiceNum}`;
 
-  const fields: readonly string[] = [
-    alphaLeft(config.transactionType, 3),    // 1-3
-    numericLong(invoiceNum, 5),              // 4-8
-    toDdmmyy(isoDate),                       // 9-14
-    numericLong(0, 5),                       // 15-19
-    toDdmmyy(isoDate),                       // 20-25
-    alphaLeft(config.currency, 3),           // 26-28
-    alphaLeft(details, 22),                  // 29-50
-    alphaLeft(config.expenseAccount, 8),     // 51-58
-    alphaLeft(config.vatInputAccount, 8),    // 59-66
-    alphaLeft(supplierAcct, 8),              // 67-74
-    alphaLeft('', 8),                        // 75-82
-    decimal92(subtotal),                     // 83-94
-    decimal92(vat),                          // 95-106
-    decimal92(total),                        // 107-118
-    decimal92(0),                            // 119-130
-    decimal92(0),                            // 131-142
-    decimal92(0),                            // 143-154
-    decimal92(0),                            // 155-166
-    decimal92(0),                            // 167-178
-  ];
-  const record = fields.join('');
-  if (record.length !== RECORD_LENGTH) {
-    throw new Error(`record length ${record.length} ≠ ${RECORD_LENGTH}`);
-  }
-  return record;
+  return buildRawRecord({
+    transactionType: config.transactionType,
+    reference1: invoiceNum,
+    documentDate: isoDate,
+    valueDate: isoDate,
+    currency: config.currency,
+    details,
+    dr1Account: config.expenseAccount,
+    dr1Amount: subtotal,
+    dr2Account: config.vatInputAccount,
+    dr2Amount: vat,
+    cr1Account: supplierAcct,
+    cr1Amount: total,
+  });
 }
 
 export function generateMoveIn(invoices: CanonicalInvoice[], config: MoveInConfig): Buffer {
@@ -89,6 +136,28 @@ export function generateMoveIn(invoices: CanonicalInvoice[], config: MoveInConfi
   const expectedSize = invoices.length * LINE_LENGTH;
   if (buffer.length !== expectedSize) {
     throw new Error(`buffer size ${buffer.length} ≠ ${expectedSize} (expected ${LINE_LENGTH} bytes per invoice)`);
+  }
+  return buffer;
+}
+
+/**
+ * Encode an array of pre-built 178-char records into a CP1255 Buffer with
+ * CR+LF line endings (180 bytes per line).
+ */
+export function encodeMoveInBuffer(records: string[]): Buffer {
+  if (records.length === 0) {
+    throw new Error('encodeMoveInBuffer: at least one record required');
+  }
+  const text = records.map((r) => {
+    if (r.length !== RECORD_LENGTH) {
+      throw new Error(`record length ${r.length} ≠ ${RECORD_LENGTH}`);
+    }
+    return r + '\r\n';
+  }).join('');
+  const buffer = iconv.encode(text, ENCODING);
+  const expectedSize = records.length * LINE_LENGTH;
+  if (buffer.length !== expectedSize) {
+    throw new Error(`buffer size ${buffer.length} ≠ ${expectedSize}`);
   }
   return buffer;
 }

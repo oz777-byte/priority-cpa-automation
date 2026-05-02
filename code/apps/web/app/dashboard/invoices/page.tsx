@@ -69,15 +69,12 @@ export default async function InvoicesPage() {
             חברה: {company.name}
           </p>
         </div>
-        <form action="/api/movein" method="post">
-          <button
-            type="submit"
-            disabled={invoices.length === 0}
-            className="px-4 py-2 bg-accent-600 text-white rounded-lg text-sm hover:bg-accent-500 disabled:opacity-50"
-          >
-            הפק MOVEIN.DAT לכל המאושרות
-          </button>
-        </form>
+        <Link
+          href="/dashboard/journal-entries"
+          className="px-4 py-2 bg-accent-600 text-white rounded-lg text-sm hover:bg-accent-500"
+        >
+          לעריכת פקודות יומן
+        </Link>
       </div>
 
       {invoices.length === 0 ? (

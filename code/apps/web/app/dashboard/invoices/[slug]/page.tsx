@@ -14,7 +14,6 @@ import {
   buildMoveInConfig,
   type CompanySettings,
 } from '@/lib/company-config';
-import { ApproveButton } from './approve-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -94,7 +93,7 @@ export default async function InvoiceDetailPage({ params }: { params: { slug: st
     },
   ];
 
-  const isApproved = invRow.status === 'approved' || invRow.status === 'exported';
+  const isExported = invRow.status === 'exported';
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -112,18 +111,13 @@ export default async function InvoiceDetailPage({ params }: { params: { slug: st
           </p>
         </div>
         <div className="flex gap-2">
-          {!isApproved && validation.passed && (
-            <ApproveButton invoiceId={invRow.id as string} />
-          )}
-          {isApproved && (
-            <form action={`/api/movein?slug=${invRow.id}`} method="post">
-              <button
-                type="submit"
-                className="px-4 py-2 bg-accent-600 text-white rounded-lg text-sm hover:bg-accent-500"
-              >
-                הורד MOVEIN.DAT
-              </button>
-            </form>
+          {!isExported && (
+            <Link
+              href="/dashboard/journal-entries"
+              className="px-4 py-2 bg-accent-600 text-white rounded-lg text-sm hover:bg-accent-500"
+            >
+              ערוך פקודת יומן
+            </Link>
           )}
         </div>
       </header>

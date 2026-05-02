@@ -1,14 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SupabaseAuditStore } from '@priority-cpa/audit-logger';
-import {
-  CanonicalInvoiceSchema,
-  type CanonicalInvoice,
-} from '@priority-cpa/invoice-schema';
-import { generateMoveIn } from '@priority-cpa/movein-generator';
+import { buildRawRecord, encodeMoveInBuffer } from '@priority-cpa/movein-generator';
 import { requireUser } from '@/lib/auth';
 import { getCurrentCompany } from '@/lib/current-company';
 import { getAdminClient } from '@/lib/supabase/admin';
-import { buildMoveInConfig, type CompanySettings } from '@/lib/company-config';
 
 export async function POST(request: NextRequest) {
   const me = await requireUser();
@@ -18,59 +13,108 @@ export async function POST(request: NextRequest) {
   }
 
   const url = new URL(request.url);
-  const single = url.searchParams.get('slug'); // optional UUID for single-invoice download
+  const singleJEId = url.searchParams.get('je'); // optional UUID for single-JE download
 
   const admin = getAdminClient();
   const audit = new SupabaseAuditStore(admin);
 
-  // Pull invoices to export
-  let q = admin
-    .from('invoices_inbox')
-    .select('id, canonical, status')
+  // Pull JEs to export
+  let jeQ = admin
+    .from('journal_entries')
+    .select('id, transaction_type, reference1, reference2, document_date, value_date, currency, details, status, invoice_id')
     .eq('company_id', company.id);
-  if (single) {
-    q = q.eq('id', single);
+  if (singleJEId) {
+    jeQ = jeQ.eq('id', singleJEId);
   } else {
-    q = q.in('status', ['approved', 'exported']);
+    jeQ = jeQ.in('status', ['draft', 'validated', 'approved']);
   }
-  const { data: invRows, error: fetchErr } = await q;
-  if (fetchErr) {
-    return NextResponse.json({ error: fetchErr.message }, { status: 500 });
-  }
-  if (!invRows || invRows.length === 0) {
+  const { data: jeRows, error: jeErr } = await jeQ.order('document_date', { ascending: true });
+  if (jeErr) return NextResponse.json({ error: jeErr.message }, { status: 500 });
+
+  if (!jeRows || jeRows.length === 0) {
     return NextResponse.json(
-      { error: 'אין חשבוניות מאושרות לייצוא' },
+      { error: 'אין פקודות יומן לייצוא' },
       { status: 400 },
     );
   }
 
-  const invoices: CanonicalInvoice[] = [];
-  const exportedIds: string[] = [];
-  for (const row of invRows) {
-    const parsed = CanonicalInvoiceSchema.safeParse(row.canonical);
-    if (!parsed.success) continue;
-    invoices.push(parsed.data);
-    exportedIds.push(row.id as string);
+  const jeIds = jeRows.map((j) => j.id as string);
+  const { data: lineRows } = await admin
+    .from('journal_entry_lines')
+    .select('id, je_id, line_no, account, debit, credit')
+    .in('je_id', jeIds)
+    .order('line_no', { ascending: true });
+
+  const linesByJE = new Map<string, Array<{ account: string; debit: number; credit: number }>>();
+  for (const l of lineRows ?? []) {
+    const arr = linesByJE.get(l.je_id as string) ?? [];
+    arr.push({
+      account: l.account as string,
+      debit: Number(l.debit),
+      credit: Number(l.credit),
+    });
+    linesByJE.set(l.je_id as string, arr);
   }
-  if (invoices.length === 0) {
+
+  const records: string[] = [];
+  const exportedJEIds: string[] = [];
+  const exportedInvoiceIds: string[] = [];
+
+  for (const je of jeRows) {
+    const lines = linesByJE.get(je.id as string) ?? [];
+    const dr = lines.filter((l) => l.debit > 0).slice(0, 2);
+    const cr = lines.filter((l) => l.credit > 0).slice(0, 2);
+    if (dr.length === 0 || cr.length === 0) continue;
+
+    // Balance check (within ±0.05)
+    const drSum = lines.reduce((s, l) => s + l.debit, 0);
+    const crSum = lines.reduce((s, l) => s + l.credit, 0);
+    if (Math.abs(drSum - crSum) > 0.05) continue;
+
+    try {
+      records.push(
+        buildRawRecord({
+          transactionType: je.transaction_type as string,
+          reference1: je.reference1 as string,
+          reference2: (je.reference2 as string | null) ?? 0,
+          documentDate: je.document_date as string,
+          valueDate: je.value_date as string,
+          currency: je.currency as string,
+          details: je.details as string,
+          dr1Account: dr[0]!.account,
+          dr1Amount: dr[0]!.debit,
+          dr2Account: dr[1]?.account,
+          dr2Amount: dr[1]?.debit,
+          cr1Account: cr[0]!.account,
+          cr1Amount: cr[0]!.credit,
+          cr2Account: cr[1]?.account,
+          cr2Amount: cr[1]?.credit,
+        }),
+      );
+      exportedJEIds.push(je.id as string);
+      if (je.invoice_id) exportedInvoiceIds.push(je.invoice_id as string);
+    } catch {
+      // record build failed — skip this JE silently for now (logs come later)
+    }
+  }
+
+  if (records.length === 0) {
     return NextResponse.json(
-      { error: 'אין חשבוניות תקינות לייצוא' },
+      { error: 'אין פקודות יומן תקינות לייצוא — בדוק איזון ושורות חובה/זכות' },
       { status: 400 },
     );
   }
 
-  const settings = (company.settings ?? {}) as CompanySettings;
-  const config = buildMoveInConfig(settings);
-  const buffer = generateMoveIn(invoices, config);
+  const buffer = encodeMoveInBuffer(records);
 
   // Record the batch
-  const batchNumber = String(Date.now()).slice(-6); // simple human-readable batch id
+  const batchNumber = String(Date.now()).slice(-6);
   const { data: batchRow } = await admin
     .from('movein_batches')
     .insert({
       company_id: company.id,
       batch_number: batchNumber,
-      scenario_breakdown: { STANDARD: invoices.length },
+      scenario_breakdown: { records: records.length },
       exported_at: new Date().toISOString(),
       exported_by: me.id,
       priority_load_status: 'pending',
@@ -79,17 +123,17 @@ export async function POST(request: NextRequest) {
     .single();
   const batchId = batchRow?.id as string | undefined;
 
-  if (batchId) {
-    // Mark invoices exported and link the batch on related JEs
-    await admin
-      .from('invoices_inbox')
-      .update({ status: 'exported', processed_at: new Date().toISOString() })
-      .in('id', exportedIds);
-
+  if (batchId && exportedJEIds.length > 0) {
     await admin
       .from('journal_entries')
       .update({ status: 'exported', batch_id: batchId })
-      .in('invoice_id', exportedIds);
+      .in('id', exportedJEIds);
+    if (exportedInvoiceIds.length > 0) {
+      await admin
+        .from('invoices_inbox')
+        .update({ status: 'exported', processed_at: new Date().toISOString() })
+        .in('id', exportedInvoiceIds);
+    }
 
     await audit.log({
       companyId: company.id,
@@ -99,7 +143,8 @@ export async function POST(request: NextRequest) {
       entityId: batchId,
       payload: {
         batch_number: batchNumber,
-        invoice_count: invoices.length,
+        record_count: records.length,
+        je_ids: exportedJEIds,
         exported_by: me.email,
       },
     });
@@ -109,7 +154,9 @@ export async function POST(request: NextRequest) {
     buffer.byteOffset,
     buffer.byteOffset + buffer.byteLength,
   ) as ArrayBuffer;
-  const filename = single ? `movein-${batchNumber}.dat` : `movein-batch-${batchNumber}.dat`;
+  const filename = singleJEId
+    ? `movein-${batchNumber}.dat`
+    : `movein-batch-${batchNumber}.dat`;
 
   return new NextResponse(ab, {
     status: 200,

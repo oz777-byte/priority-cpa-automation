@@ -26,6 +26,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <Link href="/dashboard/invoices" className="hover:text-ink-900">
               חשבוניות
             </Link>
+            <Link href="/dashboard/journal-entries" className="hover:text-ink-900">
+              פקודות יומן
+            </Link>
             <Link href="/dashboard/companies" className="hover:text-ink-900">
               חברות
             </Link>
