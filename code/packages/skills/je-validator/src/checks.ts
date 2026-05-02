@@ -78,6 +78,46 @@ export function checkVatRateMatchesDate(
   }
 }
 
+/**
+ * Catches the case where the user / OCR entered a subtotal and total that
+ * imply a VAT amount that doesn't match the expected rate — even after the
+ * subtotal+vat=total check passes.
+ *
+ * Example: subtotal=1000, total=1100 — the totals reconcile (vat=100,
+ * 1000+100=1100), but vat=100/1000=10% which is wrong for an Israeli
+ * 18% rate. The discrepancy means either subtotal or total is wrong.
+ *
+ * Skipped when the invoice is foreign currency or explicitly VAT-exempt.
+ */
+export function checkVatAmountMatchesRate(
+  invoice: CanonicalInvoice,
+  errors: ValidationError[],
+  tolerance: number,
+): void {
+  if (invoice.invoice.currency !== 'ILS') return;
+  if (invoice.invoice.is_self_invoice) return; // VAT mechanics differ
+  const subtotal = invoice.totals.subtotal;
+  const vat = invoice.totals.vat_amount ?? invoice.totals.total - subtotal;
+  if (subtotal <= 0) return;
+  if (Math.abs(vat) < 0.01 && subtotal > 0) {
+    // Zero-VAT invoices are allowed (Eilat, exports) but should be flagged.
+    return;
+  }
+  const expectedRate = getStandardVatRate(invoice.invoice.date);
+  const expectedVat = (subtotal * expectedRate) / 100;
+  // Tolerance scales with the amount (0.5% of the VAT, but at least 0.05).
+  const allowedDelta = Math.max(tolerance, expectedVat * 0.005);
+  if (Math.abs(vat - expectedVat) > allowedDelta) {
+    pushError(errors, {
+      code: 'VAT_AMOUNT_MISMATCH',
+      message: `VAT amount ${vat.toFixed(2)} does not match ${expectedRate}% × subtotal ${subtotal.toFixed(2)} = ${expectedVat.toFixed(2)} (delta ${(vat - expectedVat).toFixed(2)})`,
+      messageHe: `סכום מע"מ ${vat.toFixed(2)} אינו תואם ל-${expectedRate}% × סכום ביניים ${subtotal.toFixed(2)} (סטיה ${(vat - expectedVat).toFixed(2)} ש"ח). בדוק את הסכומים.`,
+      field: 'totals.vat_amount',
+      suggestion: 'בדוק שהסכום הביניים והסכום הכולל מייצגים את אותה חשבונית.',
+    });
+  }
+}
+
 export function checkAccountsConfigured(
   invoice: CanonicalInvoice,
   ctx: ValidationContext,

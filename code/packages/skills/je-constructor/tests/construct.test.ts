@@ -262,6 +262,156 @@ describe('constructJE — MIXED_DEDUCTION', () => {
   });
 });
 
+describe('constructJE — SELF_INVOICE (חשבונית עצמית)', () => {
+  it('produces 4 balanced lines with VAT washing out', () => {
+    const r = constructJE(
+      inv({ is_self_invoice: true }, { subtotal: 1000, total: 1180 }),
+      { ...config, outputVatAccount: '220-0' },
+    );
+    expect(r.primaryScenario).toBe('SELF_INVOICE');
+    const lines = r.records[0]!.lines;
+    expect(lines).toHaveLength(4);
+    expect(lines.find((l) => l.account === '502-0')?.debit).toBe(1000);
+    expect(lines.find((l) => l.account === '205-2')?.debit).toBe(180);
+    expect(lines.find((l) => l.account === '220-0')?.credit).toBe(180);
+    expect(lines.find((l) => l.account === '200087')?.credit).toBe(1000);
+    expect(balanced(r.records[0]!)).toBe(true);
+  });
+
+  it('warns when output VAT account is not configured', () => {
+    const r = constructJE(inv({ is_self_invoice: true }), config);
+    expect(r.warnings.some((w) => w.includes('220-0') || w.includes('עסקאות'))).toBe(true);
+  });
+
+  it('details mention self-invoice', () => {
+    const r = constructJE(
+      inv({ is_self_invoice: true }),
+      { ...config, outputVatAccount: '220-0' },
+    );
+    expect(r.records[0]!.details).toContain('עצמית');
+  });
+});
+
+describe('constructJE — PRIVATE_SUPPLIER', () => {
+  it('produces 3-line JE with no VAT and 30% withholding by default', () => {
+    const r = constructJE(
+      inv({ is_private_supplier: true }, { subtotal: 1000, total: 1000 }),
+      { ...config, withholdingAccount: '175-0' },
+    );
+    expect(r.primaryScenario).toBe('PRIVATE_SUPPLIER');
+    const lines = r.records[0]!.lines;
+    expect(lines).toHaveLength(3);
+    expect(lines.find((l) => l.account === '502-0')?.debit).toBe(1000);
+    expect(lines.find((l) => l.account === '200087')?.credit).toBe(700);
+    expect(lines.find((l) => l.account === '175-0')?.credit).toBe(300);
+    expect(balanced(r.records[0]!)).toBe(true);
+  });
+
+  it('honors per-invoice withholding_percent over the default', () => {
+    const r = constructJE(
+      inv(
+        { is_private_supplier: true, withholding_percent: 47 },
+        { subtotal: 1000, total: 1000 },
+      ),
+      { ...config, withholdingAccount: '175-0' },
+    );
+    const lines = r.records[0]!.lines;
+    expect(lines.find((l) => l.account === '200087')?.credit).toBe(530);
+    expect(lines.find((l) => l.account === '175-0')?.credit).toBe(470);
+  });
+
+  it('warns if total != subtotal (no VAT expected)', () => {
+    const r = constructJE(
+      inv({ is_private_supplier: true }, { subtotal: 1000, total: 1180 }),
+      config,
+    );
+    expect(r.warnings.some((w) => w.includes('מע"מ'))).toBe(true);
+  });
+});
+
+describe('constructJE — PREPAID', () => {
+  it('routes expense to prepaid account when months > 1', () => {
+    const r = constructJE(
+      inv({ prepaid_period_months: 12 }, { subtotal: 12000, total: 14160 }),
+      { ...config, prepaidExpenseAccount: '102-0' },
+    );
+    expect(r.primaryScenario).toBe('PREPAID');
+    const lines = r.records[0]!.lines;
+    expect(lines.find((l) => l.account === '102-0')?.debit).toBe(12000);
+    expect(lines.find((l) => l.account === '502-0')).toBeUndefined();
+    expect(lines.find((l) => l.account === '205-2')?.debit).toBeCloseTo(2160, 2);
+    expect(balanced(r.records[0]!)).toBe(true);
+  });
+
+  it('shows monthly recognition in notes', () => {
+    const r = constructJE(
+      inv({ prepaid_period_months: 12 }, { subtotal: 12000, total: 14160 }),
+      { ...config, prepaidExpenseAccount: '102-0' },
+    );
+    const notes = r.records[0]!.notes.join(' ');
+    expect(notes).toContain('1000');
+    expect(notes).toContain('12');
+  });
+
+  it('falls back to STANDARD when months is 1', () => {
+    const r = constructJE(
+      inv({ prepaid_period_months: 1 }, { subtotal: 1000, total: 1180 }),
+      { ...config, prepaidExpenseAccount: '102-0' },
+    );
+    expect(r.primaryScenario).toBe('STANDARD');
+  });
+});
+
+describe('constructJE — cumulative overlays', () => {
+  it('MIXED_DEDUCTION + WITH_ALLOCATION emits both signals', () => {
+    const r = constructJE(
+      inv(
+        { allocation_number: '1I44279301234567890A' },
+        { subtotal: 1000, total: 1180 },
+      ),
+      { ...config, nonDeductibleAccount: '502-1' },
+      { mixedDeductionCategory: 'vehicle' },
+    );
+    expect(r.primaryScenario).toBe('MIXED_DEDUCTION');
+    expect(r.overlays).toContain('WITH_ALLOCATION');
+    expect(r.warnings.some((w) => w.includes('הקצאה'))).toBe(true);
+    // Allocation appears in notes of all records
+    for (const rec of r.records) {
+      expect(rec.notes.some((n) => n.includes('הקצאה'))).toBe(true);
+    }
+  });
+
+  it('WITH_WITHHOLDING + DIFFERENT_DATES preserves both', () => {
+    const r = constructJE(
+      inv(
+        { value_date: '2026-03-01' },
+        { subtotal: 1000, total: 1180 },
+      ),
+      { ...config, withholdingAccount: '175-0' },
+      { withholdingPercent: 5 },
+    );
+    expect(r.primaryScenario).toBe('WITH_WITHHOLDING');
+    expect(r.overlays).toContain('DIFFERENT_DATES');
+    expect(r.records[0]!.valueDate).toBe('2026-03-01');
+    expect(r.records[0]!.notes.some((n) => n.includes('תאריך ערך'))).toBe(true);
+  });
+
+  it('WITH_COST_CENTER overlay tags expense lines on top of MIXED_DEDUCTION', () => {
+    const r = constructJE(
+      inv({ cost_center: 'PROJ-A' }, { subtotal: 1000, total: 1180 }),
+      { ...config, nonDeductibleAccount: '502-1' },
+      { mixedDeductionCategory: 'vehicle' },
+    );
+    expect(r.primaryScenario).toBe('MIXED_DEDUCTION');
+    expect(r.overlays).toContain('WITH_COST_CENTER');
+    // Expense lines (debit > 0) are tagged with the cost center
+    const taggedLines = r.records.flatMap((rec) => rec.lines).filter(
+      (l) => l.costCenter === 'PROJ-A',
+    );
+    expect(taggedLines.length).toBeGreaterThan(0);
+  });
+});
+
 describe('constructJE — FOREIGN_CURRENCY', () => {
   it('USD invoice with rate 3.7 fills both ILS and FX amounts per line', () => {
     const r = constructJE(

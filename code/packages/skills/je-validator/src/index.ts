@@ -3,6 +3,7 @@ import { DEFAULT_ROUNDING_TOLERANCE } from '@priority-cpa/israeli-vat-logic';
 import {
   checkTotalsConsistent,
   checkVatRateMatchesDate,
+  checkVatAmountMatchesRate,
   checkAccountsConfigured,
   checkSupplierKnown,
   checkDatePlausibility,
@@ -30,6 +31,7 @@ export function validateInvoice(
 
   checkTotalsConsistent(parsed, errors, warnings, tolerance);
   checkVatRateMatchesDate(parsed, errors);
+  checkVatAmountMatchesRate(parsed, errors, tolerance);
   checkAccountsConfigured(parsed, context, errors);
   checkSupplierKnown(parsed, context, errors);
   checkDatePlausibility(parsed, context, errors, warnings);

@@ -104,9 +104,25 @@ export function constructJE(
       ];
       break;
 
+    case 'SELF_INVOICE':
+      records = [buildSelfInvoice(invoice, config, warnings)];
+      break;
+
+    case 'PRIVATE_SUPPLIER':
+      records = [buildPrivateSupplier(invoice, config, warnings)];
+      break;
+
+    case 'PREPAID':
+      records = [buildPrepaid(invoice, config, warnings)];
+      break;
+
     default:
       records = [buildStandard(invoice, config, 'STANDARD')];
   }
+
+  // Apply overlay post-processors. These augment warnings/notes/details
+  // when secondary scenarios apply on top of the primary builder.
+  applyOverlays(records, detection.overlays, invoice, warnings);
 
   return {
     primaryScenario: detection.scenario,
@@ -114,6 +130,75 @@ export function constructJE(
     records,
     warnings,
   };
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ * Overlay post-processors — applied to whatever records the primary
+ * builder produced. Each augments warnings/notes/details when its
+ * scenario is among the overlays detected.
+ * ──────────────────────────────────────────────────────────────── */
+
+function applyOverlays(
+  records: JERecord[],
+  overlays: Scenario[],
+  invoice: CanonicalInvoice,
+  warnings: string[],
+): void {
+  if (overlays.includes('WITH_ALLOCATION')) {
+    const allocation = invoice.invoice.allocation_number ?? '';
+    if (allocation) {
+      for (const r of records) {
+        r.notes.push(`מספר הקצאה: ${allocation}`);
+        if (!r.details.includes('הקצ')) {
+          r.details = `${r.details} הקצ:${allocation.slice(0, 6)}`;
+        }
+      }
+      if (allocation.length > 5) {
+        warnings.push(
+          `מספר הקצאה ${allocation} ארוך מ-5 תווים — ייצוא יעבור אוטומטית לפורמט FLEXIBLE.`,
+        );
+      }
+    }
+  }
+
+  if (overlays.includes('MISSING_ALLOCATION')) {
+    warnings.push(
+      'חשבונית מעל הרף ללא מספר הקצאה — ייצוא ייחסם עד שתוסיף הקצאה (חוק 2024+).',
+    );
+  }
+
+  if (overlays.includes('WITH_COST_CENTER')) {
+    const cc = invoice.invoice.cost_center;
+    if (cc) {
+      for (const r of records) {
+        for (const line of r.lines) {
+          // Tag expense + VAT lines, not the supplier credit line.
+          if (line.debit > 0) {
+            line.costCenter = line.costCenter ?? cc;
+          }
+        }
+        r.notes.push(`מרכז עלות: ${cc}`);
+      }
+      warnings.push(
+        `מרכז עלות "${cc}" שמור בשורות; ייצוא יעבור אוטומטית לפורמט FLEXIBLE.`,
+      );
+    }
+  }
+
+  if (overlays.includes('DIFFERENT_DATES')) {
+    for (const r of records) {
+      r.notes.push(`תאריך ערך (${r.valueDate}) שונה מתאריך החשבונית (${r.documentDate}).`);
+    }
+  }
+
+  if (overlays.includes('WITH_DISCOUNT')) {
+    const discount = invoice.totals.discount_amount;
+    if (discount) {
+      for (const r of records) {
+        r.notes.push(`הנחה מסחרית: ${discount.toFixed(2)} ₪ (כבר מקופלת בסכומים).`);
+      }
+    }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -631,5 +716,188 @@ function buildWithCostCenter(
     recordIndex: 0,
     lines,
     notes: costCenter ? [`מרכז עלות: ${costCenter}`] : [],
+  };
+}
+
+/**
+ * SELF_INVOICE (חשבונית עצמית) — Israeli business buying a service from a
+ * non-Israeli supplier. The buyer reports VAT both as input AND output
+ * (net effect zero, but reflected in PCN874 as both תשומות + עסקאות).
+ *
+ *   DR  expense                       subtotal
+ *   DR  vat_input                     vat
+ *   CR  vat_output                    vat       (offset — Israeli VAT obligation)
+ *   CR  supplier (foreign)            subtotal  (no VAT to supplier — they are not Israeli)
+ *
+ * Net: expense recognized, supplier owed `subtotal`, VAT washes out.
+ * 4-line JE — fits 180-format (2 DR + 2 CR).
+ */
+function buildSelfInvoice(
+  invoice: CanonicalInvoice,
+  config: ConstructorConfig,
+  warnings: string[],
+): JERecord {
+  const subtotal = invoice.totals.subtotal;
+  const vat = vatFromTotals(invoice);
+
+  if (!config.outputVatAccount) {
+    warnings.push(
+      'SELF_INVOICE: לא הוגדר חשבון מע"מ עסקאות בהגדרות החברה — נבחר 220-0 כברירת מחדל.',
+    );
+  }
+  const outputVatAcct = config.outputVatAccount ?? '220-0';
+
+  const lines: JELine[] = [
+    { account: config.expenseAccount, debit: subtotal, credit: 0 },
+    { account: config.vatInputAccount, debit: vat, credit: 0 },
+    { account: outputVatAcct, debit: 0, credit: vat },
+    {
+      account: invoice.supplier.internal_code_priority,
+      debit: 0,
+      credit: subtotal,
+    },
+  ];
+
+  return {
+    reference1: invoice.invoice.number,
+    documentDate: invoice.invoice.date,
+    valueDate: valueDateOf(invoice),
+    currency: invoice.invoice.currency,
+    details: `${detailsString(invoice, config)} (חשבונית עצמית)`,
+    transactionType: config.transactionType,
+    scenario: 'SELF_INVOICE',
+    recordIndex: 0,
+    lines,
+    notes: [
+      'חשבונית עצמית — שירות מספק זר עם מע"מ ישראלי',
+      `תשומות + עסקאות: ${vat.toFixed(2)} ₪ (השפעה נטו על מס: 0)`,
+      'לכלול בדיווח PCN874 הן בתשומות והן בעסקאות',
+    ],
+  };
+}
+
+/**
+ * PRIVATE_SUPPLIER (יחיד בלי ע.מ) — Individual without a business tax id.
+ * Israeli law typically mandates 30% withholding for such suppliers (subject
+ * to confirmation per supplier — 47% on undeclared, 0% with valid אישור).
+ *
+ *   DR  expense                       subtotal     (no VAT — individual ≠ עוסק)
+ *   CR  supplier                      subtotal × (100-w%)/100
+ *   CR  withholding (175-0)           subtotal × w%/100
+ *
+ * 3-line JE. No VAT line — individuals not registered for VAT cannot issue
+ * a tax invoice (חשבונית מס) so their "invoice" is a קבלה / receipt.
+ */
+function buildPrivateSupplier(
+  invoice: CanonicalInvoice,
+  config: ConstructorConfig,
+  warnings: string[],
+): JERecord {
+  const subtotal = invoice.totals.subtotal;
+  const total = invoice.totals.total;
+
+  if (Math.abs(total - subtotal) > 0.05) {
+    warnings.push(
+      `PRIVATE_SUPPLIER: סך הכול (${total.toFixed(2)}) שונה מסכום הביניים (${subtotal.toFixed(2)}) — ספק פרטי אינו רשאי לגבות מע"מ; בדוק את החשבונית.`,
+    );
+  }
+
+  const withholdingPercent =
+    invoice.invoice.withholding_percent ??
+    config.privateSupplierWithholdingPercent ??
+    30;
+  const withholdingAmount = roundCents((subtotal * withholdingPercent) / 100);
+  const supplierCredit = roundCents(subtotal - withholdingAmount);
+
+  if (!config.withholdingAccount) {
+    warnings.push(
+      'PRIVATE_SUPPLIER: לא הוגדר חשבון רשות המסים — ניכוי במקור לא יישלח לחשבון ספציפי. נבחר 175-0 כברירת מחדל.',
+    );
+  }
+  const withholdingAcct = config.withholdingAccount ?? '175-0';
+
+  const lines: JELine[] = [
+    { account: config.expenseAccount, debit: subtotal, credit: 0 },
+    {
+      account: invoice.supplier.internal_code_priority,
+      debit: 0,
+      credit: supplierCredit,
+    },
+    { account: withholdingAcct, debit: 0, credit: withholdingAmount },
+  ];
+
+  return {
+    reference1: invoice.invoice.number,
+    documentDate: invoice.invoice.date,
+    valueDate: valueDateOf(invoice),
+    currency: invoice.invoice.currency,
+    details: `${detailsString(invoice, config)} (יחיד · ניכוי ${withholdingPercent}%)`,
+    transactionType: config.transactionType,
+    scenario: 'PRIVATE_SUPPLIER',
+    recordIndex: 0,
+    lines,
+    notes: [
+      `ספק פרטי (יחיד בלי ע.מ) — אין מע"מ`,
+      `סך לתשלום לספק: ${supplierCredit.toFixed(2)} ₪`,
+      `ניכוי במקור (${withholdingPercent}%): ${withholdingAmount.toFixed(2)} ₪ → רשות המסים`,
+    ],
+  };
+}
+
+/**
+ * PREPAID (הוצאה לתקופות) — Annual insurance, prepaid rent, etc. Goes to a
+ * prepaid asset account at payment, recognized into expense monthly over
+ * the period. This builder produces ONLY the entry-side JE (DR prepaid /
+ * CR supplier). The monthly recognition entries (DR expense / CR prepaid)
+ * are scheduled separately.
+ *
+ *   DR  prepaid_expense (asset)       subtotal
+ *   DR  vat_input                     vat
+ *   CR  supplier                      total
+ */
+function buildPrepaid(
+  invoice: CanonicalInvoice,
+  config: ConstructorConfig,
+  warnings: string[],
+): JERecord {
+  const subtotal = invoice.totals.subtotal;
+  const total = invoice.totals.total;
+  const vat = vatFromTotals(invoice);
+  const months = invoice.invoice.prepaid_period_months ?? 1;
+
+  if (!config.prepaidExpenseAccount) {
+    warnings.push(
+      'PREPAID: לא הוגדר חשבון "הוצאות מראש" בהגדרות החברה — נבחר 102-0 כברירת מחדל.',
+    );
+  }
+  const prepaidAcct = config.prepaidExpenseAccount ?? '102-0';
+
+  const lines: JELine[] = [
+    { account: prepaidAcct, debit: subtotal, credit: 0 },
+    { account: config.vatInputAccount, debit: vat, credit: 0 },
+    {
+      account: invoice.supplier.internal_code_priority,
+      debit: 0,
+      credit: total,
+    },
+  ];
+
+  const monthlyRecognition = roundCents(subtotal / months);
+
+  return {
+    reference1: invoice.invoice.number,
+    documentDate: invoice.invoice.date,
+    valueDate: valueDateOf(invoice),
+    currency: invoice.invoice.currency,
+    details: `${detailsString(invoice, config)} (פרוס ${months} חוד׳)`,
+    transactionType: config.transactionType,
+    scenario: 'PREPAID',
+    recordIndex: 0,
+    lines,
+    notes: [
+      `הוצאה מוכרת על פני ${months} חודשים`,
+      `הכרה חודשית: ${monthlyRecognition.toFixed(2)} ₪`,
+      'JE הכרה חודשית (DR הוצאה / CR הוצאות מראש) ייווצרו בנפרד — בקרוב',
+    ],
   };
 }

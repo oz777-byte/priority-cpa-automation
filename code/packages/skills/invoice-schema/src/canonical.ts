@@ -19,6 +19,16 @@ export const ScenarioSchema = z.enum([
   'DIFFERENT_DATES',
   'AGGREGATOR',
   'MISSING_ALLOCATION',
+  /** Self-invoice (חשבונית עצמית) — Israeli business buying a service from a
+   * non-Israeli supplier. The buyer reports VAT both as input AND output
+   * (net effect zero, but reflected in PCN874). 4-line JE. */
+  'SELF_INVOICE',
+  /** Private supplier (יחיד בלי ע.מ) — individual without business id.
+   * Triggers automatic 30% withholding. */
+  'PRIVATE_SUPPLIER',
+  /** Prepaid expense (הוצאה לתקופות) — amount goes to a prepaid asset
+   * account at payment, recognized monthly over the period. */
+  'PREPAID',
 ]);
 export type Scenario = z.infer<typeof ScenarioSchema>;
 
@@ -101,6 +111,12 @@ export const InvoiceHeaderSchema = z
         }),
       )
       .optional(),
+    /** SELF_INVOICE: this is a self-invoice for a foreign service import. */
+    is_self_invoice: z.boolean().optional(),
+    /** PREPAID: months over which to recognize this expense (1 = current month only). */
+    prepaid_period_months: z.number().int().positive().optional(),
+    /** PRIVATE_SUPPLIER: invoice from an individual without a business tax id. */
+    is_private_supplier: z.boolean().optional(),
   })
   .passthrough();
 export type InvoiceHeader = z.infer<typeof InvoiceHeaderSchema>;

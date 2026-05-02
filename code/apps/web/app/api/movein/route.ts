@@ -54,6 +54,7 @@ interface BuiltFile {
 }
 
 const FLEX_ALLOC_THRESHOLD = 5;
+const FLEX_REFERENCE_THRESHOLD = 5;
 const FLEX_MAX_180_LINES = 4;
 
 function shouldUseFlexible(records: ValidJE[]): boolean {
@@ -63,6 +64,11 @@ function shouldUseFlexible(records: ValidJE[]): boolean {
     if (cc && cc.length > 0) return true;
     const alloc = r.canonical?.invoice?.allocation_number;
     if (alloc && alloc.length > FLEX_ALLOC_THRESHOLD) return true;
+    // Invoice number longer than 5 digits gets truncated by the 180-format
+    // (אסמכתא 1 = 5 digits). Switch to FLEXIBLE so the full number is
+    // preserved for PCN874 and audit purposes.
+    const refStr = String(r.je.reference1 ?? '');
+    if (refStr.length > FLEX_REFERENCE_THRESHOLD) return true;
   }
   return false;
 }

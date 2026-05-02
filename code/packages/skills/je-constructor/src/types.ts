@@ -22,6 +22,21 @@ export interface ConstructorConfig {
    * For CREDIT_NOTE scenarios — keep transaction_type or override with reversal type.
    */
   creditNoteTransactionType?: string;
+  /**
+   * For SELF_INVOICE scenarios — the output-VAT (עסקאות) account.
+   * Defaults to '220-0' if absent.
+   */
+  outputVatAccount?: string;
+  /**
+   * For PREPAID scenarios — the prepaid expense (asset) account.
+   * Defaults to '102-0' if absent.
+   */
+  prepaidExpenseAccount?: string;
+  /**
+   * Default withholding rate for PRIVATE_SUPPLIER (יחיד without ע.מ).
+   * Israeli law default is 30%; can be overridden per company.
+   */
+  privateSupplierWithholdingPercent?: number;
 }
 
 export interface JELine {
