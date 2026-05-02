@@ -48,7 +48,7 @@ const COMPANY_TABS: Tab[] = [
   { slug: '/suppliers', label: 'ספקים', icon: Users },
   { slug: '/account-mapping', label: 'מיפוי חשבונות', icon: GitBranch, comingSoon: true },
   { slug: '/exports', label: 'היסטוריית ייצוא', icon: History },
-  { slug: '/reports', label: 'דוחות', icon: BarChart3, comingSoon: true },
+  { slug: '/reports', label: 'דוחות', icon: BarChart3 },
   { slug: '/settings', label: 'הגדרות חברה', icon: Settings },
 ];
 
