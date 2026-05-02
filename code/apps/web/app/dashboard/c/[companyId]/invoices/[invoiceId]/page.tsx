@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowRight, FileEdit } from 'lucide-react';
+import { ArrowRight, FileEdit, FileText } from 'lucide-react';
 import {
   CanonicalInvoiceSchema,
   type CanonicalInvoice,
@@ -10,6 +10,7 @@ import { buildRecord } from '@priority-cpa/movein-generator';
 import { requireUser } from '@/lib/auth';
 import { loadCompanyForUser } from '@/lib/company-context';
 import { getAdminClient } from '@/lib/supabase/admin';
+import { getInvoicePdfSignedUrl } from '@/lib/storage';
 import {
   buildValidationContext,
   buildMoveInConfig,
@@ -33,11 +34,14 @@ export default async function InvoiceDetailPage({
   const admin = getAdminClient();
   const { data: invRow } = await admin
     .from('invoices_inbox')
-    .select('id, status, canonical, created_at, company_id')
+    .select('id, status, canonical, created_at, company_id, pdf_path')
     .eq('id', params.invoiceId)
     .maybeSingle();
 
   if (!invRow || invRow.company_id !== company.id) notFound();
+
+  const pdfPath = (invRow.pdf_path as string | null) ?? null;
+  const pdfSignedUrl = pdfPath ? await getInvoicePdfSignedUrl(pdfPath) : null;
 
   const parsed = CanonicalInvoiceSchema.safeParse(invRow.canonical);
   if (!parsed.success) {
@@ -85,7 +89,7 @@ export default async function InvoiceDetailPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <Link
           href={`/dashboard/c/${company.id}/invoices`}
           className="text-sm text-accent-600 hover:underline flex items-center gap-1"
@@ -93,13 +97,26 @@ export default async function InvoiceDetailPage({
           <ArrowRight size={14} />
           חזרה לרשימה
         </Link>
-        <Link
-          href={`/dashboard/c/${company.id}/journal-entries`}
-          className="px-3 py-1.5 bg-accent-600 text-white rounded-lg text-sm hover:bg-accent-500 flex items-center gap-1.5"
-        >
-          <FileEdit size={14} />
-          ערוך פקודת יומן
-        </Link>
+        <div className="flex items-center gap-2">
+          {pdfSignedUrl && (
+            <a
+              href={pdfSignedUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="px-3 py-1.5 border border-ink-200 text-ink-700 hover:bg-ink-50 rounded-lg text-sm flex items-center gap-1.5"
+            >
+              <FileText size={14} />
+              צפה ב-PDF המקורי
+            </a>
+          )}
+          <Link
+            href={`/dashboard/c/${company.id}/journal-entries`}
+            className="px-3 py-1.5 bg-accent-600 text-white rounded-lg text-sm hover:bg-accent-500 flex items-center gap-1.5"
+          >
+            <FileEdit size={14} />
+            ערוך פקודת יומן
+          </Link>
+        </div>
       </div>
 
       <header>

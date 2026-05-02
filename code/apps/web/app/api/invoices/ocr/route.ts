@@ -1,11 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { extractInvoiceFields, type ExtractedInvoice } from '@priority-cpa/ocr-azure';
 import { requireUser } from '@/lib/auth';
+import { loadCompanyForUser } from '@/lib/company-context';
+import { uploadInvoicePdf } from '@/lib/storage';
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
 export async function POST(request: NextRequest) {
-  await requireUser();
+  const me = await requireUser();
+
+  const url = new URL(request.url);
+  const companyIdParam = url.searchParams.get('companyId');
+  if (!companyIdParam) {
+    return NextResponse.json(
+      { error: 'companyId query parameter required' },
+      { status: 400 },
+    );
+  }
+  // Verifies access (404s if the user isn't in the company's firm).
+  const company = await loadCompanyForUser(me.id, me.email, companyIdParam);
 
   const contentType = request.headers.get('content-type') ?? '';
   if (!contentType.includes('multipart/form-data')) {
@@ -30,22 +43,26 @@ export async function POST(request: NextRequest) {
     );
   }
   if (file.type && !file.type.includes('pdf') && !file.name.toLowerCase().endsWith('.pdf')) {
-    return NextResponse.json(
-      { error: 'נא לגרור קובץ PDF בלבד' },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: 'נא לגרור קובץ PDF בלבד' }, { status: 400 });
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
 
-  const extracted: ExtractedInvoice = await extractInvoiceFields(buffer);
-  // Strip `raw` from the API response — it can be large and is for debugging only.
-  const { raw: _raw, ...safe } = extracted;
+  // Run extraction + storage upload in parallel — they're independent.
+  const [extracted, uploadResult] = await Promise.all([
+    extractInvoiceFields(buffer),
+    uploadInvoicePdf(company.id, buffer, file.name).catch((err: unknown) => {
+      console.error('[ocr] PDF upload failed:', err);
+      return null;
+    }),
+  ]);
+  const { raw: _raw, ...safe } = extracted as ExtractedInvoice;
 
   return NextResponse.json({
     ok: true,
     extracted: safe,
     fileName: file.name,
     fileSize: file.size,
+    pdfPath: uploadResult?.path ?? null,
   });
 }

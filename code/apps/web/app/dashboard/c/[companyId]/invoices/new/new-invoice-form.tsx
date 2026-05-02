@@ -31,13 +31,19 @@ export function NewInvoiceForm({
   // formKey forces the form to re-mount when OCR sets new defaults so
   // the inputs pick up the new defaultValue props.
   const [formKey, setFormKey] = useState(0);
+  const [pdfPath, setPdfPath] = useState<string | null>(null);
   const [extractionMeta, setExtractionMeta] = useState<{
     source: ExtractedInvoice['source'];
     fileName: string;
     confidence: number;
+    pdfStored: boolean;
   } | null>(null);
 
-  function applyExtraction(extracted: ExtractedInvoice, fileName: string) {
+  function applyExtraction(
+    extracted: ExtractedInvoice,
+    fileName: string,
+    storedPdfPath: string | null,
+  ) {
     setDefaults((prev) => ({
       ...prev,
       ...(extracted.supplier?.name ? { supplierName: extracted.supplier.name } : {}),
@@ -52,23 +58,26 @@ export function NewInvoiceForm({
         ? { total: String(extracted.totals.total) }
         : {}),
     }));
+    setPdfPath(storedPdfPath);
     setExtractionMeta({
       source: extracted.source,
       fileName,
       confidence: extracted.confidence,
+      pdfStored: storedPdfPath !== null,
     });
     setFormKey((k) => k + 1);
   }
 
   return (
     <div className="space-y-4">
-      <Dropzone onExtracted={applyExtraction} />
+      <Dropzone companyId={companyId} onExtracted={applyExtraction} />
 
       {extractionMeta && (
         <ExtractionBanner
           source={extractionMeta.source}
           fileName={extractionMeta.fileName}
           confidence={extractionMeta.confidence}
+          pdfStored={extractionMeta.pdfStored}
         />
       )}
 
@@ -78,6 +87,7 @@ export function NewInvoiceForm({
         className="bg-white border border-ink-200 rounded-xl p-6 space-y-5"
       >
         <input type="hidden" name="companyId" value={companyId} />
+        {pdfPath && <input type="hidden" name="pdfPath" value={pdfPath} />}
 
         <Section title="פרטי הספק">
           <Field
@@ -294,9 +304,15 @@ export function NewInvoiceForm({
 /* ====================== dropzone ====================== */
 
 function Dropzone({
+  companyId,
   onExtracted,
 }: {
-  onExtracted: (extracted: ExtractedInvoice, fileName: string) => void;
+  companyId: string;
+  onExtracted: (
+    extracted: ExtractedInvoice,
+    fileName: string,
+    pdfPath: string | null,
+  ) => void;
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -308,15 +324,23 @@ function Dropzone({
     fd.set('file', file);
     startTransition(async () => {
       try {
-        const r = await fetch('/api/invoices/ocr', { method: 'POST', body: fd });
+        const r = await fetch(
+          `/api/invoices/ocr?companyId=${encodeURIComponent(companyId)}`,
+          { method: 'POST', body: fd },
+        );
         const json = (await r.json()) as
-          | { ok: true; extracted: ExtractedInvoice; fileName: string }
+          | {
+              ok: true;
+              extracted: ExtractedInvoice;
+              fileName: string;
+              pdfPath: string | null;
+            }
           | { ok?: false; error?: string };
         if (!r.ok || !('ok' in json) || !json.ok) {
           setError(('error' in json && json.error) || 'חילוץ נכשל');
           return;
         }
-        onExtracted(json.extracted, json.fileName);
+        onExtracted(json.extracted, json.fileName, json.pdfPath);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'שגיאה בלתי צפויה');
       }
@@ -384,10 +408,12 @@ function ExtractionBanner({
   source,
   fileName,
   confidence,
+  pdfStored,
 }: {
   source: ExtractedInvoice['source'];
   fileName: string;
   confidence: number;
+  pdfStored: boolean;
 }) {
   const isMock = source === 'mock';
   const tone = isMock
@@ -406,19 +432,20 @@ function ExtractionBanner({
         <div className="font-medium">
           {isMock ? 'הצגת mock — לא חולץ מ-Azure' : 'חולץ מהקובץ — בדוק את הערכים'}
         </div>
-        <div className="text-xs mt-0.5 opacity-80">
+        <div className="text-xs mt-0.5 opacity-80 leading-relaxed">
           <span dir="ltr" className="font-mono">
             {fileName}
           </span>
           {!isMock && confidence > 0 && (
             <span> · ביטחון ממוצע {Math.round(confidence * 100)}%</span>
           )}
+          {pdfStored && <span> · ה-PDF נשמר ויוצג בעמוד החשבונית</span>}
           {isMock && (
             <span>
               {' '}
               · הוסף <code dir="ltr">AZURE_DOC_INTELLIGENCE_ENDPOINT</code> ו-
-              <code dir="ltr">AZURE_DOC_INTELLIGENCE_KEY</code> ב-Vercel כדי
-              להפעיל חילוץ אמיתי
+              <code dir="ltr">AZURE_DOC_INTELLIGENCE_KEY</code> ב-Vercel
+              להפעלת חילוץ אמיתי
             </span>
           )}
         </div>

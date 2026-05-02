@@ -68,6 +68,8 @@ const Input = z.object({
   split2Account: z.string().optional(),
   split2Amount: z.coerce.number().nonnegative().optional(),
   split2Label: z.string().optional(),
+  // Storage path of the source PDF (set when the form was pre-filled by OCR).
+  pdfPath: z.string().optional().or(z.literal('').transform(() => undefined)),
 });
 
 export interface CreateInvoiceResult {
@@ -107,6 +109,7 @@ export async function createInvoiceManuallyAction(
     split2Account: formData.get('split2Account') || undefined,
     split2Amount: formData.get('split2Amount') || undefined,
     split2Label: formData.get('split2Label') || undefined,
+    pdfPath: formData.get('pdfPath') || undefined,
   });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.errors[0]?.message ?? 'נתונים לא תקינים' };
@@ -199,6 +202,7 @@ export async function createInvoiceManuallyAction(
       canonical,
       fingerprint,
       status: 'queued',
+      ...(data.pdfPath ? { pdf_path: data.pdfPath } : {}),
     })
     .select('id')
     .single();
