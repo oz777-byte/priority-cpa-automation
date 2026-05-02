@@ -1,0 +1,23 @@
+{
+  "name": "@priority-cpa/je-constructor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Constructs balanced multi-record journal entries from a canonical invoice + scenario.",
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@priority-cpa/invoice-schema": "*",
+    "@priority-cpa/israeli-vat-logic": "*",
+    "@priority-cpa/scenario-detector": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2"
+  }
+}

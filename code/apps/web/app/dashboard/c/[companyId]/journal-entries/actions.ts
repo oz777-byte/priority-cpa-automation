@@ -5,12 +5,25 @@ import {
   CanonicalInvoiceSchema,
   type CanonicalInvoice,
 } from '@priority-cpa/invoice-schema';
+import { constructJE } from '@priority-cpa/je-constructor';
+import type { ConstructorConfig } from '@priority-cpa/je-constructor';
 import { getAdminClient } from '@/lib/supabase/admin';
 import type { CompanySettings } from '@/lib/company-config';
 
+function settingsToConstructorConfig(s: CompanySettings): ConstructorConfig {
+  return {
+    expenseAccount: s.expense_account ?? '502-0',
+    vatInputAccount: s.vat_input_account ?? '205-2',
+    detailsPrefix: s.details_prefix ?? 'קניות',
+    transactionType: s.transaction_type ?? 'מ',
+  };
+}
+
 /**
  * Backfill: ensure every queued/classified invoice in `companyId` has a
- * draft JE. Idempotent. Called from the JE editor page on every visit.
+ * draft JE. Uses the scenario detector + JE constructor to build the right
+ * JE shape per scenario (STANDARD, WITH_ALLOCATION, IMMEDIATE_PAYMENT, etc.).
+ * Idempotent — called from the JE editor page on every visit.
  */
 export async function ensureDraftJEsForCompany(
   companyId: string,
@@ -26,7 +39,8 @@ export async function ensureDraftJEsForCompany(
     .eq('id', companyId)
     .maybeSingle();
   if (!company) return { created: 0 };
-  const settings = ((company.settings ?? {}) as CompanySettings);
+  const settings = (company.settings ?? {}) as CompanySettings;
+  const config = settingsToConstructorConfig(settings);
 
   const { data: orphans } = await admin
     .from('invoices_inbox')
@@ -45,74 +59,75 @@ export async function ensureDraftJEsForCompany(
 
     const parsed = CanonicalInvoiceSchema.safeParse(inv.canonical);
     if (!parsed.success) continue;
-    const c: CanonicalInvoice = parsed.data;
+    const canonical: CanonicalInvoice = parsed.data;
 
-    const subtotal = c.totals.subtotal;
-    const total = c.totals.total;
-    const vat = Math.round((total - subtotal) * 100) / 100;
+    const result = constructJE(canonical, config);
 
-    const { data: jeRow, error: jeErr } = await admin
-      .from('journal_entries')
-      .insert({
-        company_id: companyId,
-        invoice_id: inv.id,
-        scenario: 'STANDARD',
-        movein_format: '180',
-        status: 'draft',
-        transaction_type: settings.transaction_type ?? 'מ',
-        reference1: c.invoice.number,
-        document_date: c.invoice.date,
-        value_date: c.invoice.date,
-        currency: c.invoice.currency,
-        details: `${settings.details_prefix ?? 'קניות'} ${c.invoice.number}`,
-        created_by: userId,
-      })
-      .select('id')
-      .single();
-    if (jeErr || !jeRow) continue;
+    // For now: each detected JERecord is stored as a separate journal_entries
+    // row in the DB. (Multi-record scenarios will produce > 1 row.)
+    for (const record of result.records) {
+      const { data: jeRow, error: jeErr } = await admin
+        .from('journal_entries')
+        .insert({
+          company_id: companyId,
+          invoice_id: inv.id,
+          scenario: record.scenario,
+          movein_format: '180',
+          status: 'draft',
+          transaction_type: record.transactionType,
+          reference1: record.reference1,
+          ...(record.reference2 ? { reference2: record.reference2 } : {}),
+          document_date: record.documentDate,
+          value_date: record.valueDate,
+          currency: record.currency,
+          details: record.details,
+          created_by: userId,
+          ...(result.warnings.length > 0
+            ? {
+                validation_results: {
+                  constructor_warnings: result.warnings,
+                  overlays: result.overlays,
+                  notes: record.notes,
+                },
+              }
+            : {}),
+        })
+        .select('id')
+        .single();
+      if (jeErr || !jeRow) continue;
 
-    await admin.from('journal_entry_lines').insert([
-      {
+      const linesPayload = record.lines.map((l, i) => ({
         je_id: jeRow.id,
-        line_no: 1,
-        account: settings.expense_account ?? '502-0',
-        debit: subtotal,
-        credit: 0,
-      },
-      {
-        je_id: jeRow.id,
-        line_no: 2,
-        account: settings.vat_input_account ?? '205-2',
-        debit: vat,
-        credit: 0,
-      },
-      {
-        je_id: jeRow.id,
-        line_no: 3,
-        account: c.supplier.internal_code_priority,
-        debit: 0,
-        credit: total,
-      },
-    ]);
+        line_no: i + 1,
+        account: l.account,
+        debit: l.debit,
+        credit: l.credit,
+        ...(l.details ? { details: l.details } : {}),
+      }));
+      await admin.from('journal_entry_lines').insert(linesPayload);
+
+      await audit.log({
+        companyId,
+        userId,
+        action: 'je.create',
+        entityType: 'journal_entry',
+        entityId: jeRow.id as string,
+        payload: {
+          invoice_id: inv.id,
+          scenario: record.scenario,
+          overlays: result.overlays,
+          auto_drafted: true,
+          warnings: result.warnings,
+          record_index: record.recordIndex,
+        },
+      });
+      created++;
+    }
 
     await admin
       .from('invoices_inbox')
       .update({ status: 'classified' })
       .eq('id', inv.id);
-
-    await audit.log({
-      companyId,
-      userId,
-      action: 'je.create',
-      entityType: 'journal_entry',
-      entityId: jeRow.id as string,
-      payload: {
-        invoice_id: inv.id,
-        scenario: 'STANDARD',
-        auto_drafted: true,
-      },
-    });
-    created++;
   }
   return { created };
 }

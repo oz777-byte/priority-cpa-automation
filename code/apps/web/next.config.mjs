@@ -37,8 +37,10 @@ const nextConfig = {
     '@priority-cpa/db',
     '@priority-cpa/invoice-schema',
     '@priority-cpa/israeli-vat-logic',
+    '@priority-cpa/je-constructor',
     '@priority-cpa/je-validator',
     '@priority-cpa/movein-generator',
+    '@priority-cpa/scenario-detector',
   ],
   env: {
     SUPABASE_URL,
