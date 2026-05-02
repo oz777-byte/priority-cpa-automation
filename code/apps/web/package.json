@@ -11,6 +11,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@priority-cpa/boi-rates": "*",
     "@priority-cpa/db": "*",
     "@priority-cpa/invoice-schema": "*",
     "@priority-cpa/israeli-vat-logic": "*",

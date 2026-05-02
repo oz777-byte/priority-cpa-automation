@@ -8,6 +8,7 @@ import { CurrencySchema } from '@priority-cpa/invoice-schema';
 import { requireUser } from '@/lib/auth';
 import { loadCompanyForUser } from '@/lib/company-context';
 import { getAdminClient } from '@/lib/supabase/admin';
+import { getRateForDate } from '@/lib/fx-rates';
 
 interface SplitFields {
   split1Account?: string | undefined;
@@ -160,6 +161,19 @@ export async function createInvoiceManuallyAction(
     };
   }
 
+  // Auto-fill fx_rate from BOI cache when foreign currency without explicit rate.
+  let fxRate = data.fxRate;
+  let fxAutoFilled = false;
+  let fxAutoFillSource: string | null = null;
+  if (!fxRate && data.currency !== 'ILS') {
+    const cached = await getRateForDate(data.currency, data.invoiceDate);
+    if (cached) {
+      fxRate = cached.rate;
+      fxAutoFilled = true;
+      fxAutoFillSource = `${cached.source} ${cached.rateDate}`;
+    }
+  }
+
   const canonical = {
     invoice: {
       number: data.invoiceNumber,
@@ -173,7 +187,7 @@ export async function createInvoiceManuallyAction(
       ...(data.mixedDeductionCategory
         ? { mixed_deduction_category: data.mixedDeductionCategory }
         : {}),
-      ...(data.fxRate ? { fx_rate: data.fxRate } : {}),
+      ...(fxRate ? { fx_rate: fxRate } : {}),
       ...(data.costCenter ? { cost_center: data.costCenter } : {}),
       ...(buildExpenseSplits(data) ? { expense_splits: buildExpenseSplits(data) } : {}),
     },
@@ -191,6 +205,9 @@ export async function createInvoiceManuallyAction(
     metadata: {
       source: 'manual_entry',
       ingested_at: new Date().toISOString(),
+      ...(fxAutoFilled
+        ? { fx_rate_auto_filled: true, fx_rate_source: fxAutoFillSource }
+        : {}),
     },
   };
 
