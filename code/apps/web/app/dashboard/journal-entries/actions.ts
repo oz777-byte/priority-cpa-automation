@@ -29,8 +29,7 @@ export async function ensureDraftJEsForCurrentCompany(): Promise<{ created: numb
     .from('invoices_inbox')
     .select('id, canonical')
     .eq('company_id', company.id)
-    .in('status', ['received', 'processing', 'classified', 'queued'])
-    .is('id', 'not.null');
+    .in('status', ['received', 'processing', 'classified', 'queued']);
 
   let created = 0;
   for (const inv of orphans ?? []) {

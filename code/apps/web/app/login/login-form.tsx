@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { LogIn } from 'lucide-react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 
 export function LoginForm() {
@@ -24,67 +25,77 @@ export function LoginForm() {
       if (err) throw err;
       router.push(next);
       router.refresh();
-    } catch (e: unknown) {
-      // Generic error message — don't leak whether the email exists.
+    } catch {
       setError('פרטי כניסה שגויים');
       setBusy(false);
     }
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-sm bg-white rounded-xl shadow-sm border border-ink-200 p-8 space-y-6">
-        <header className="text-center space-y-2">
-          <h1 className="text-2xl font-bold text-ink-900">כניסה למערכת</h1>
-          <p className="text-sm text-ink-600">Priority CPA Automation</p>
-        </header>
+    <div className="bg-white/[0.07] border border-white/10 rounded-xl p-8 space-y-6 backdrop-blur-md shadow-glow">
+      <header className="text-center space-y-1">
+        <h1 className="text-xl font-bold text-white">כניסה למערכת</h1>
+        <p className="text-xs text-white/60">Priority CPA Automation</p>
+      </header>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-ink-800 mb-1">אימייל</label>
-            <input
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              dir="ltr"
-              className="w-full px-3 py-2 border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500"
-              placeholder="you@example.com"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-ink-800 mb-1">סיסמה</label>
-            <input
-              type="password"
-              required
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              dir="ltr"
-              className="w-full px-3 py-2 border border-ink-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500"
-            />
-          </div>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Field label="אימייל">
+          <input
+            type="email"
+            required
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            dir="ltr"
+            placeholder="you@example.com"
+            className="w-full px-3 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </Field>
 
-          {error && (
-            <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">
-              {error}
-            </div>
+        <Field label="סיסמה">
+          <input
+            type="password"
+            required
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            dir="ltr"
+            className="w-full px-3 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </Field>
+
+        {error && (
+          <div className="text-sm text-red-300 bg-red-900/30 border border-red-500/30 rounded p-2.5">
+            {error}
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={busy}
+          className="w-full py-3 bg-brand-500 text-brand-950 rounded-lg font-semibold hover:bg-brand-400 disabled:opacity-50 transition flex items-center justify-center gap-2"
+        >
+          {busy ? 'מעבד...' : (
+            <>
+              <LogIn size={18} />
+              כניסה
+            </>
           )}
+        </button>
+      </form>
 
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full py-2.5 bg-accent-600 text-white rounded-lg font-medium hover:bg-accent-500 disabled:opacity-50 transition"
-          >
-            {busy ? 'מעבד...' : 'כניסה'}
-          </button>
-        </form>
+      <p className="text-xs text-white/40 text-center">
+        ההרשמה נעשית באמצעות הזמנה ממנהל המערכת בלבד.
+      </p>
+    </div>
+  );
+}
 
-        <p className="text-xs text-ink-400 text-center">
-          ההרשמה נעשית באמצעות הזמנה ממנהל המערכת בלבד.
-        </p>
-      </div>
-    </main>
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-white/80 mb-1.5">{label}</label>
+      {children}
+    </div>
   );
 }
