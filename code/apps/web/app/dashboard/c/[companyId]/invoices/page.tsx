@@ -7,6 +7,7 @@ import { loadCompanyForUser } from '@/lib/company-context';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { buildValidationContext, type CompanySettings } from '@/lib/company-config';
 import { InvoicesTable, type InvoiceListRow, type InvoiceStatus } from './invoices-table';
+import { BulkInvoiceDropzone } from './bulk-dropzone';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,6 +100,8 @@ export default async function CompanyInvoicesPage({
           </Link>
         </div>
       </div>
+
+      <BulkInvoiceDropzone companyId={company.id} />
 
       <InvoicesTable
         rows={tableRows}
