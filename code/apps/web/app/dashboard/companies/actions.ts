@@ -127,7 +127,7 @@ export async function seedPocInvoicesAction(formData: FormData): Promise<{ ok: b
     return { ok: false, error: 'אין הרשאה לחברה זו' };
   }
 
-  // Two POC invoices, hardcoded as canonical objects.
+  // Two sample invoices for demonstration / load testing.
   const pocInvoices = [
     {
       slug: 'wertheim-4427930',

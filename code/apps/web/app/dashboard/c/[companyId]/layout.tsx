@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { LayoutDashboard, Building2, ChevronLeft } from 'lucide-react';
 import { requireUser } from '@/lib/auth';
 import { loadCompanyForUser } from '@/lib/company-context';
-import { setCompanyCookie } from '@/lib/current-company';
 
 export default async function CompanyWorkspaceLayout({
   children,
@@ -13,7 +12,6 @@ export default async function CompanyWorkspaceLayout({
 }) {
   const me = await requireUser();
   const company = await loadCompanyForUser(me.id, me.email, params.companyId);
-  setCompanyCookie(company.id);
 
   return (
     <div className="space-y-4">

@@ -3,116 +3,66 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { SupabaseAuditStore } from '@priority-cpa/audit-logger';
-import {
-  CanonicalInvoiceSchema,
-  type CanonicalInvoice,
-} from '@priority-cpa/invoice-schema';
 import { requireUser } from '@/lib/auth';
-import { getCurrentCompany } from '@/lib/current-company';
+import { ensureUserFirm } from '@/lib/bootstrap';
 import { getAdminClient } from '@/lib/supabase/admin';
-import type { CompanySettings } from '@/lib/company-config';
 
 /**
- * Make sure every queued/classified invoice in the current company has a
- * draft JE. Idempotent.
+ * Verify that a JE belongs to the user's firm (via its company).
+ * Returns the JE row + its company_id, or null if not found / no access.
  */
-export async function ensureDraftJEsForCurrentCompany(): Promise<{ created: number }> {
-  const me = await requireUser();
-  const company = await getCurrentCompany(me.id, me.email);
-  if (!company) return { created: 0 };
-
+async function verifyJEAccess(
+  jeId: string,
+  userId: string,
+  email: string,
+): Promise<{ companyId: string; status: string } | null> {
+  const firmId = await ensureUserFirm(userId, email);
   const admin = getAdminClient();
-  const settings = (company.settings ?? {}) as CompanySettings;
-  const audit = new SupabaseAuditStore(admin);
+  const { data } = await admin
+    .from('journal_entries')
+    .select('id, company_id, status, companies!inner(firm_id)')
+    .eq('id', jeId)
+    .maybeSingle();
+  if (!data) return null;
+  // The embedded `companies` row may come as object or array depending on the
+  // shape of the query — normalize.
+  const companyRel = (data as unknown as { companies: { firm_id: string } | { firm_id: string }[] }).companies;
+  const companyFirmId = Array.isArray(companyRel) ? companyRel[0]?.firm_id : companyRel?.firm_id;
+  if (companyFirmId !== firmId) return null;
+  return {
+    companyId: data.company_id as string,
+    status: data.status as string,
+  };
+}
 
-  const { data: orphans } = await admin
-    .from('invoices_inbox')
-    .select('id, canonical')
-    .eq('company_id', company.id)
-    .in('status', ['received', 'processing', 'classified', 'queued']);
-
-  let created = 0;
-  for (const inv of orphans ?? []) {
-    // Has JE already?
-    const { data: existing } = await admin
-      .from('journal_entries')
-      .select('id')
-      .eq('invoice_id', inv.id)
-      .maybeSingle();
-    if (existing) continue;
-
-    const parsed = CanonicalInvoiceSchema.safeParse(inv.canonical);
-    if (!parsed.success) continue;
-    const c: CanonicalInvoice = parsed.data;
-
-    const subtotal = c.totals.subtotal;
-    const total = c.totals.total;
-    const vat = Math.round((total - subtotal) * 100) / 100;
-
-    const { data: jeRow, error: jeErr } = await admin
-      .from('journal_entries')
-      .insert({
-        company_id: company.id,
-        invoice_id: inv.id,
-        scenario: 'STANDARD',
-        movein_format: '180',
-        status: 'draft',
-        transaction_type: settings.transaction_type ?? 'מ',
-        reference1: c.invoice.number,
-        document_date: c.invoice.date,
-        value_date: c.invoice.date,
-        currency: c.invoice.currency,
-        details: `${settings.details_prefix ?? 'קניות'} ${c.invoice.number}`,
-        created_by: me.id,
-      })
-      .select('id')
-      .single();
-    if (jeErr || !jeRow) continue;
-
-    await admin.from('journal_entry_lines').insert([
-      {
-        je_id: jeRow.id,
-        line_no: 1,
-        account: settings.expense_account ?? '502-0',
-        debit: subtotal,
-        credit: 0,
-      },
-      {
-        je_id: jeRow.id,
-        line_no: 2,
-        account: settings.vat_input_account ?? '205-2',
-        debit: vat,
-        credit: 0,
-      },
-      {
-        je_id: jeRow.id,
-        line_no: 3,
-        account: c.supplier.internal_code_priority,
-        debit: 0,
-        credit: total,
-      },
-    ]);
-
-    await admin
-      .from('invoices_inbox')
-      .update({ status: 'classified' })
-      .eq('id', inv.id);
-
-    await audit.log({
-      companyId: company.id,
-      userId: me.id,
-      action: 'je.create',
-      entityType: 'journal_entry',
-      entityId: jeRow.id as string,
-      payload: {
-        invoice_id: inv.id,
-        scenario: 'STANDARD',
-        auto_drafted: true,
-      },
-    });
-    created++;
-  }
-  return { created };
+async function verifyLineAccess(
+  lineId: string,
+  userId: string,
+  email: string,
+): Promise<{ jeId: string; companyId: string; status: string } | null> {
+  const firmId = await ensureUserFirm(userId, email);
+  const admin = getAdminClient();
+  const { data } = await admin
+    .from('journal_entry_lines')
+    .select('id, je_id, journal_entries!inner(company_id, status, companies!inner(firm_id))')
+    .eq('id', lineId)
+    .maybeSingle();
+  if (!data) return null;
+  const je = (data as unknown as {
+    journal_entries:
+      | { company_id: string; status: string; companies: { firm_id: string } | { firm_id: string }[] }
+      | { company_id: string; status: string; companies: { firm_id: string } | { firm_id: string }[] }[];
+  }).journal_entries;
+  const jeRow = Array.isArray(je) ? je[0] : je;
+  if (!jeRow) return null;
+  const companies = jeRow.companies;
+  const companyFirmId = Array.isArray(companies) ? companies[0]?.firm_id : companies?.firm_id;
+  if (companyFirmId !== firmId) return null;
+  return {
+    jeId: data.je_id as string,
+    companyId: jeRow.company_id,
+    status: jeRow.status,
+  };
 }
 
 const UpdateJEHeaderInput = z.object({
@@ -128,8 +78,6 @@ export async function updateJEHeaderAction(formData: FormData): Promise<{ ok: bo
   const me = await requireUser();
   const admin = getAdminClient();
   const audit = new SupabaseAuditStore(admin);
-  const company = await getCurrentCompany(me.id, me.email);
-  if (!company) return { ok: false, error: 'אין חברה נבחרת' };
 
   const parsed = UpdateJEHeaderInput.safeParse({
     jeId: formData.get('jeId'),
@@ -141,15 +89,9 @@ export async function updateJEHeaderAction(formData: FormData): Promise<{ ok: bo
   });
   if (!parsed.success) return { ok: false, error: 'נתונים לא תקינים' };
 
-  const { data: existing } = await admin
-    .from('journal_entries')
-    .select('id, company_id, status')
-    .eq('id', parsed.data.jeId)
-    .maybeSingle();
-  if (!existing || existing.company_id !== company.id) {
-    return { ok: false, error: 'פקודת יומן לא נמצאה' };
-  }
-  if (existing.status === 'exported') {
+  const access = await verifyJEAccess(parsed.data.jeId, me.id, me.email);
+  if (!access) return { ok: false, error: 'פקודת יומן לא נמצאה' };
+  if (access.status === 'exported') {
     return { ok: false, error: 'פקודת יומן שיוצאה אינה ניתנת לעריכה' };
   }
 
@@ -169,7 +111,7 @@ export async function updateJEHeaderAction(formData: FormData): Promise<{ ok: bo
   }
 
   await audit.log({
-    companyId: company.id,
+    companyId: access.companyId,
     userId: me.id,
     action: 'je.update',
     entityType: 'journal_entry',
@@ -193,8 +135,6 @@ export async function updateLineAction(formData: FormData): Promise<{ ok: boolea
   const me = await requireUser();
   const admin = getAdminClient();
   const audit = new SupabaseAuditStore(admin);
-  const company = await getCurrentCompany(me.id, me.email);
-  if (!company) return { ok: false, error: 'אין חברה נבחרת' };
 
   const parsed = UpdateLineInput.safeParse({
     lineId: formData.get('lineId'),
@@ -205,20 +145,9 @@ export async function updateLineAction(formData: FormData): Promise<{ ok: boolea
   });
   if (!parsed.success) return { ok: false, error: 'נתונים לא תקינים' };
 
-  // Verify ownership
-  const { data: line } = await admin
-    .from('journal_entry_lines')
-    .select('id, je_id, journal_entries!inner(company_id, status)')
-    .eq('id', parsed.data.lineId)
-    .maybeSingle();
-  // RLS-bypass admin client returns embedded row as object or array; normalize
-  const je = Array.isArray((line as unknown as { journal_entries: unknown[] })?.journal_entries)
-    ? ((line as unknown as { journal_entries: { company_id: string; status: string }[] }).journal_entries[0])
-    : ((line as unknown as { journal_entries: { company_id: string; status: string } })?.journal_entries);
-  if (!line || !je || je.company_id !== company.id) {
-    return { ok: false, error: 'שורה לא נמצאה' };
-  }
-  if (je.status === 'exported') {
+  const access = await verifyLineAccess(parsed.data.lineId, me.id, me.email);
+  if (!access) return { ok: false, error: 'שורה לא נמצאה' };
+  if (access.status === 'exported') {
     return { ok: false, error: 'שורה ב-JE שיוצא אינה ניתנת לעריכה' };
   }
 
@@ -237,7 +166,7 @@ export async function updateLineAction(formData: FormData): Promise<{ ok: boolea
   if (error) return { ok: false, error: error.message };
 
   await audit.log({
-    companyId: company.id,
+    companyId: access.companyId,
     userId: me.id,
     action: 'je.line_update',
     entityType: 'journal_entry_line',
@@ -260,8 +189,6 @@ export async function addLineAction(formData: FormData): Promise<{ ok: boolean; 
   const me = await requireUser();
   const admin = getAdminClient();
   const audit = new SupabaseAuditStore(admin);
-  const company = await getCurrentCompany(me.id, me.email);
-  if (!company) return { ok: false, error: 'אין חברה נבחרת' };
 
   const parsed = AddLineInput.safeParse({
     jeId: formData.get('jeId'),
@@ -271,13 +198,9 @@ export async function addLineAction(formData: FormData): Promise<{ ok: boolean; 
   });
   if (!parsed.success) return { ok: false, error: 'נתונים לא תקינים' };
 
-  const { data: je } = await admin
-    .from('journal_entries')
-    .select('id, company_id, status')
-    .eq('id', parsed.data.jeId)
-    .maybeSingle();
-  if (!je || je.company_id !== company.id) return { ok: false, error: 'JE לא נמצא' };
-  if (je.status === 'exported') return { ok: false, error: 'JE שיוצא אינו ניתן לעריכה' };
+  const access = await verifyJEAccess(parsed.data.jeId, me.id, me.email);
+  if (!access) return { ok: false, error: 'JE לא נמצא' };
+  if (access.status === 'exported') return { ok: false, error: 'JE שיוצא אינו ניתן לעריכה' };
 
   const { data: maxLine } = await admin
     .from('journal_entry_lines')
@@ -298,7 +221,7 @@ export async function addLineAction(formData: FormData): Promise<{ ok: boolean; 
   if (error) return { ok: false, error: error.message };
 
   await audit.log({
-    companyId: company.id,
+    companyId: access.companyId,
     userId: me.id,
     action: 'je.line_add',
     entityType: 'journal_entry',
@@ -314,28 +237,19 @@ export async function removeLineAction(formData: FormData): Promise<{ ok: boolea
   const me = await requireUser();
   const admin = getAdminClient();
   const audit = new SupabaseAuditStore(admin);
-  const company = await getCurrentCompany(me.id, me.email);
-  if (!company) return { ok: false, error: 'אין חברה נבחרת' };
 
   const lineIdRaw = formData.get('lineId');
   if (typeof lineIdRaw !== 'string') return { ok: false, error: 'מזהה לא תקין' };
 
-  const { data: line } = await admin
-    .from('journal_entry_lines')
-    .select('id, je_id, journal_entries!inner(company_id, status)')
-    .eq('id', lineIdRaw)
-    .maybeSingle();
-  const je = Array.isArray((line as unknown as { journal_entries: unknown[] })?.journal_entries)
-    ? ((line as unknown as { journal_entries: { company_id: string; status: string }[] }).journal_entries[0])
-    : ((line as unknown as { journal_entries: { company_id: string; status: string } })?.journal_entries);
-  if (!line || !je || je.company_id !== company.id) return { ok: false, error: 'שורה לא נמצאה' };
-  if (je.status === 'exported') return { ok: false, error: 'JE שיוצא אינו ניתן לעריכה' };
+  const access = await verifyLineAccess(lineIdRaw, me.id, me.email);
+  if (!access) return { ok: false, error: 'שורה לא נמצאה' };
+  if (access.status === 'exported') return { ok: false, error: 'JE שיוצא אינו ניתן לעריכה' };
 
   const { error } = await admin.from('journal_entry_lines').delete().eq('id', lineIdRaw);
   if (error) return { ok: false, error: error.message };
 
   await audit.log({
-    companyId: company.id,
+    companyId: access.companyId,
     userId: me.id,
     action: 'je.line_remove',
     entityType: 'journal_entry_line',

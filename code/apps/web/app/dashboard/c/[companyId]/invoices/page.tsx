@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Inbox, FileEdit } from 'lucide-react';
+import { Inbox, FileEdit, Plus } from 'lucide-react';
 import {
   CanonicalInvoiceSchema,
   type CanonicalInvoice,
@@ -66,13 +66,22 @@ export default async function CompanyInvoicesPage({
             ל"פקודות יומן".
           </p>
         </div>
-        <Link
-          href={`/dashboard/c/${company.id}/journal-entries`}
-          className="flex items-center gap-1.5 text-sm text-accent-600 hover:underline"
-        >
-          <FileEdit size={14} />
-          לעורך פקודות יומן
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            href={`/dashboard/c/${company.id}/invoices/new`}
+            className="flex items-center gap-1.5 px-4 py-2 bg-accent-600 text-white rounded-lg text-sm font-medium hover:bg-accent-500"
+          >
+            <Plus size={14} />
+            הוסף חשבונית
+          </Link>
+          <Link
+            href={`/dashboard/c/${company.id}/journal-entries`}
+            className="flex items-center gap-1.5 text-sm text-accent-600 hover:underline"
+          >
+            <FileEdit size={14} />
+            לעורך פקודות יומן
+          </Link>
+        </div>
       </div>
 
       {invoices.length === 0 ? (
@@ -108,23 +117,33 @@ export default async function CompanyInvoicesPage({
 }
 
 function EmptyState({ companyId }: { companyId: string }) {
-  void companyId;
   return (
-    <div className="bg-ink-50/60 border border-ink-200 rounded-xl p-8 text-center space-y-3">
+    <div className="bg-ink-50/60 border border-ink-200 rounded-xl p-8 text-center space-y-4">
       <div className="w-12 h-12 mx-auto rounded-full bg-white flex items-center justify-center">
         <Inbox size={20} className="text-ink-400" />
       </div>
-      <h3 className="font-semibold text-ink-900">אין חשבוניות לחברה זו</h3>
-      <p className="text-sm text-ink-600 max-w-md mx-auto">
-        לטעינת חשבוניות לדוגמה — עבור ל"החברות שלי" ולחץ על "טעינת חשבוניות POC"
-        ליד החברה.
-      </p>
-      <Link
-        href="/dashboard/companies"
-        className="inline-block px-4 py-2 bg-accent-600 text-white rounded-lg text-sm hover:bg-accent-500"
-      >
-        לעמוד החברות
-      </Link>
+      <div className="space-y-1">
+        <h3 className="font-semibold text-ink-900">אין חשבוניות עדיין</h3>
+        <p className="text-sm text-ink-600 max-w-md mx-auto">
+          הוסף את החשבונית הראשונה ידנית, או טען חשבוניות לדוגמה דרך עמוד ניהול
+          החברות.
+        </p>
+      </div>
+      <div className="flex justify-center gap-3">
+        <Link
+          href={`/dashboard/c/${companyId}/invoices/new`}
+          className="inline-flex items-center gap-1.5 px-4 py-2 bg-accent-600 text-white rounded-lg text-sm hover:bg-accent-500"
+        >
+          <Plus size={14} />
+          הוסף חשבונית
+        </Link>
+        <Link
+          href="/dashboard/companies"
+          className="inline-block px-4 py-2 text-ink-600 hover:bg-ink-50 border border-ink-200 rounded-lg text-sm"
+        >
+          לעמוד החברות
+        </Link>
+      </div>
     </div>
   );
 }

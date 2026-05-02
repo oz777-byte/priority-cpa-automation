@@ -61,7 +61,7 @@ export function CompaniesPanel({
       }
       setInfo(
         r.created === 0
-          ? 'חשבוניות ה-POC כבר נטענו לחברה זו.'
+          ? 'חשבוניות לדוגמה כבר נטענו לחברה זו.'
           : `נטענו ${r.created} חשבוניות לדוגמה.`,
       );
     });
@@ -126,7 +126,7 @@ export function CompaniesPanel({
                         disabled={pending}
                         className="text-ink-600 hover:underline disabled:opacity-50"
                       >
-                        טעינת חשבוניות POC
+                        טעינת חשבוניות לדוגמה
                       </button>
                     </td>
                   </tr>
