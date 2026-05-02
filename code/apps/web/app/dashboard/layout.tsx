@@ -1,9 +1,16 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth';
+import {
+  listCompaniesForUser,
+  getCurrentCompany,
+} from '@/lib/current-company';
 import { LogoutButton } from './logout-button';
+import { CompanySwitcher } from './company-switcher';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
+  const companies = await listCompaniesForUser(user.id, user.email);
+  const current = await getCurrentCompany(user.id, user.email);
 
   return (
     <div className="min-h-screen flex flex-col bg-ink-50">
@@ -19,6 +26,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <Link href="/dashboard/invoices" className="hover:text-ink-900">
               חשבוניות
             </Link>
+            <Link href="/dashboard/companies" className="hover:text-ink-900">
+              חברות
+            </Link>
             <Link href="/dashboard/settings" className="hover:text-ink-900">
               הגדרות
             </Link>
@@ -30,6 +40,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </nav>
         </div>
         <div className="flex items-center gap-3 text-sm">
+          <CompanySwitcher
+            companies={companies.map((c) => ({ id: c.id, name: c.name }))}
+            currentId={current?.id ?? null}
+          />
           {user.role === 'admin' && (
             <span className="px-2 py-0.5 rounded bg-accent-500/10 text-accent-600 text-xs">
               מנהל

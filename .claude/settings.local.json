@@ -20,7 +20,9 @@
       "Bash(git remote *)",
       "Bash(git push *)",
       "Bash(cmdkey /list)",
-      "Bash(git credential-manager *)"
+      "Bash(git credential-manager *)",
+      "Bash(node --env-file=.env.local --experimental-strip-types -e ' *)",
+      "Bash(node --env-file=.env.local --experimental-strip-types scripts/reset-and-verify.ts \"OzPriorityCPA2026\")"
     ]
   }
 }
