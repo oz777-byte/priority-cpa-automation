@@ -44,7 +44,7 @@ const COMPANY_TABS: Tab[] = [
   { slug: '', label: 'סקירה', icon: LayoutDashboard },
   { slug: '/invoices', label: 'חשבוניות', icon: Inbox },
   { slug: '/journal-entries', label: 'פקודות יומן', icon: FileEdit },
-  { slug: '/bank-reconciliation', label: 'התאמות בנק ואשראי', icon: Wallet, comingSoon: true },
+  { slug: '/bank-reconciliation', label: 'התאמות בנק ואשראי', icon: Wallet },
   { slug: '/suppliers', label: 'ספקים', icon: Users },
   { slug: '/account-mapping', label: 'מיפוי חשבונות', icon: GitBranch },
   { slug: '/exports', label: 'היסטוריית ייצוא', icon: History },
