@@ -99,7 +99,7 @@ export const RULES: AccountingRule[] = [
     description:
       'מספר הקצאה הוא מזהה שמופק על ידי רשות המסים לחשבוניות גבוהות (חוק 2024+). חשבונית מעל הרף ללא הקצאה — תשומותיה נפסלות. הרף: 25,000 ₪ ב-2024, ~20,000 ₪ מ-2025.',
     triggers: ['allocation_number קיים בחשבונית'],
-    jeStructure: 'זהה ל-STANDARD. מספר ההקצאה נשמר בשדה הפרטים (פורמט 180) או בשדה ייעודי (פורמט FLEXIBLE — בקרוב).',
+    jeStructure: 'זהה ל-STANDARD. מספר ההקצאה נשמר בשדה הפרטים (פורמט 180) או בשדה ייעודי (פורמט FLEXIBLE — אוטומטי כשההקצאה > 5 תווים).',
     example: {
       description: 'חשבונית מעל הרף עם הקצאה',
       invoice: {
@@ -244,7 +244,7 @@ export const RULES: AccountingRule[] = [
     description:
       'מרכז עלות הוא תיוג שמאפשר חיתוך פנימי: לראות כמה הוצאה לכל פרויקט, מחלקה, או יוזמה. דורש פורמט FLEXIBLE כי 180 לא תומך בשדה הזה.',
     triggers: ['costCenter מוגדר בקונטקסט'],
-    jeStructure: 'זהה ל-STANDARD מבחינת חשבונות, אבל חובה פורמט FLEXIBLE. כל שורה מקבלת תיוג מרכז עלות.',
+    jeStructure: 'זהה ל-STANDARD מבחינת חשבונות, אבל הייצוא עובר אוטומטית לפורמט FLEXIBLE (movein.doc + movein.prm בתוך zip). כל שורה מקבלת תיוג מרכז עלות.',
     example: {
       description: 'חשבונית וירטהיים שייכת לפרויקט "PROJ-A"',
       invoice: { number: '4427930', supplier: 'וירטהיים', subtotal: 484.78, total: 572, extras: { 'מרכז עלות': 'PROJ-A' } },
@@ -254,7 +254,10 @@ export const RULES: AccountingRule[] = [
         { account: '200087', side: 'CR', amount: '572.00', label: 'ספק' },
       ],
     },
-    rules: ['בקרוב: ניהול רשימת מרכזי עלות פר-חברה'],
+    rules: [
+      'מערכת הייצוא עוברת אוטומטית ל-FLEXIBLE כשמרכז עלות מופיע בחשבונית',
+      'בקרוב: ניהול רשימת מרכזי עלות פר-חברה',
+    ],
     perCompanyOverrides: [
       'רשימת מרכזי עלות (פרויקטים, מחלקות) — בקרוב',
       'מרכז עלות ברירת מחדל — בקרוב',

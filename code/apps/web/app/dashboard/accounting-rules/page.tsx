@@ -50,7 +50,7 @@ export default function AccountingRulesPage() {
       </div>
 
       {/* Universal rules note */}
-      <div className="bg-brand-radial text-white rounded-xl p-5 mb-8">
+      <div className="bg-brand-radial text-white rounded-xl p-5 mb-4">
         <div className="font-semibold mb-1">שתי שכבות של לוגיקה</div>
         <div className="text-sm text-white/70 leading-relaxed">
           <strong className="text-white">אוניברסלי</strong> (זהה לכל החברות): שיעור
@@ -58,6 +58,19 @@ export default function AccountingRulesPage() {
           <strong className="text-white mr-3">פר-חברה</strong>: חשבונות, מרכזי
           עלות, חשבונות בנק, מאסטר ספקים, כללי מיפוי. כל זה מוגדר בנפרד לכל
           לקוח.
+        </div>
+      </div>
+
+      {/* Export format note */}
+      <div className="bg-white border border-ink-200 rounded-xl p-4 mb-8 text-sm text-ink-700">
+        <div className="font-semibold text-ink-900 mb-1">פורמטי ייצוא MOVEIN</div>
+        <div className="leading-relaxed">
+          המערכת בוחרת אוטומטית את הפורמט הנכון לייצוא:{' '}
+          <strong>180</strong> (קובץ <code dir="ltr">.dat</code> רגיל) למקרים
+          סטנדרטיים, או <strong>FLEXIBLE</strong> (zip עם{' '}
+          <code dir="ltr">movein.doc</code> + <code dir="ltr">movein.prm</code>)
+          כאשר נדרשים מרכז עלות, מספר הקצאה ארוך מ-5 תווים, או יותר מ-4 שורות
+          לרשומה.
         </div>
       </div>
 
