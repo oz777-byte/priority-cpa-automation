@@ -35,24 +35,54 @@ export async function ensureDraftJEsForCompany(
   // company-level defaults (matched by tax_id, then by internal_code).
   const { data: supplierRows } = await admin
     .from('suppliers')
-    .select('internal_code, tax_id, default_expense_account, default_cost_center')
+    .select('id, internal_code, tax_id, default_expense_account, default_cost_center')
     .eq('company_id', companyId);
   const supplierByTaxId = new Map<
     string,
-    { default_expense_account: string | null; default_cost_center: string | null }
+    {
+      id: string;
+      default_expense_account: string | null;
+      default_cost_center: string | null;
+    }
   >();
   const supplierByCode = new Map<
     string,
-    { default_expense_account: string | null; default_cost_center: string | null }
+    {
+      id: string;
+      default_expense_account: string | null;
+      default_cost_center: string | null;
+    }
   >();
   for (const s of supplierRows ?? []) {
     const v = {
+      id: s.id as string,
       default_expense_account: (s.default_expense_account as string | null) ?? null,
       default_cost_center: (s.default_cost_center as string | null) ?? null,
     };
     if (s.tax_id) supplierByTaxId.set(s.tax_id as string, v);
     if (s.internal_code) supplierByCode.set(s.internal_code as string, v);
   }
+
+  // Pull mapping rules in priority order. The first one whose conditions
+  // match the invoice wins; rules override both supplier defaults and
+  // company defaults.
+  const { data: ruleRows } = await admin
+    .from('account_mapping_rules')
+    .select(
+      'id, priority, match_supplier_id, match_amount_min, match_amount_max, expense_account, vat_account, cost_center',
+    )
+    .eq('company_id', companyId)
+    .order('priority', { ascending: true });
+  const rules = (ruleRows ?? []) as Array<{
+    id: string;
+    priority: number;
+    match_supplier_id: string | null;
+    match_amount_min: number | null;
+    match_amount_max: number | null;
+    expense_account: string;
+    vat_account: string;
+    cost_center: string | null;
+  }>;
 
   const { data: orphans } = await admin
     .from('invoices_inbox')
@@ -95,6 +125,36 @@ export async function ensureDraftJEsForCompany(
         !canonical.invoice.cost_center
       ) {
         canonical.invoice.cost_center = supplierMatch.default_cost_center;
+      }
+    }
+
+    // Highest precedence: account mapping rules. Pick the first rule whose
+    // conditions all match this invoice. Overrides both supplier defaults
+    // and company defaults.
+    const matchedRule = rules.find((rule) => {
+      if (
+        rule.match_supplier_id &&
+        rule.match_supplier_id !== (supplierMatch?.id ?? null)
+      ) {
+        return false;
+      }
+      const subtotal = canonical.totals.subtotal;
+      if (rule.match_amount_min !== null && subtotal < rule.match_amount_min) {
+        return false;
+      }
+      if (rule.match_amount_max !== null && subtotal > rule.match_amount_max) {
+        return false;
+      }
+      return true;
+    });
+    if (matchedRule) {
+      config = {
+        ...config,
+        expenseAccount: matchedRule.expense_account,
+        vatInputAccount: matchedRule.vat_account,
+      };
+      if (matchedRule.cost_center && !canonical.invoice.cost_center) {
+        canonical.invoice.cost_center = matchedRule.cost_center;
       }
     }
 
