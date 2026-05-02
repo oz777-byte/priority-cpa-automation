@@ -18,6 +18,15 @@ export type {
   JERecord,
 } from './types.js';
 
+// AR (sales) side — separate from the supplier-side constructJE above.
+export { constructARJE } from './ar-index.js';
+export type {
+  ARConstructorConfig,
+  ARConstructResult,
+  ARJELine,
+  ARJERecord,
+} from './ar-types.js';
+
 /**
  * Build a balanced multi-record JE from a canonical invoice + company config.
  *

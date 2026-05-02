@@ -27,3 +27,20 @@ export type {
 
 export { fromAzureDI, fromGoogleDI } from './mappers.js';
 export type { AzureDIResult, AzureDIInvoiceFields, GoogleDIResult } from './mappers.js';
+
+export {
+  SalesScenarioSchema,
+  CustomerSchema,
+  SalesLineSchema,
+  SalesTotalsSchema,
+  SalesInvoiceHeaderSchema,
+  SalesInvoiceSchema,
+} from './sales.js';
+export type {
+  SalesScenario,
+  Customer,
+  SalesLine,
+  SalesTotals,
+  SalesInvoiceHeader,
+  SalesInvoice,
+} from './sales.js';
