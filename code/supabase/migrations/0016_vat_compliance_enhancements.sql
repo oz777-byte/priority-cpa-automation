@@ -9,8 +9,13 @@
 -- =====================================================================
 
 -- ─── 1. companies — VAT meta ────────────────────────────────────────
-create type vat_basis as enum ('accrual', 'cash');
-create type vat_filing_frequency as enum ('monthly', 'bimonthly', 'annual');
+do $$ begin
+  create type vat_basis as enum ('accrual', 'cash');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type vat_filing_frequency as enum ('monthly', 'bimonthly', 'annual');
+exception when duplicate_object then null; end $$;
 
 alter table companies
   add column if not exists vat_basis vat_basis not null default 'accrual';
@@ -21,11 +26,13 @@ comment on column companies.vat_basis is
   'accrual = report VAT by invoice/value date (default for limited companies). cash = report VAT by payment date (small businesses < 1.95M ILS turnover).';
 
 -- ─── 2. suppliers — dealer status ───────────────────────────────────
-create type supplier_dealer_status as enum (
-  'registered',  -- עוסק רשום: standard registered dealer with VAT
-  'exempt',      -- עוסק פטור: small business, no VAT on invoices, no allocation
-  'foreign'      -- ספק זר: foreign supplier, self-invoice scenario
-);
+do $$ begin
+  create type supplier_dealer_status as enum (
+    'registered',  -- עוסק רשום: standard registered dealer with VAT
+    'exempt',      -- עוסק פטור: small business, no VAT on invoices, no allocation
+    'foreign'      -- ספק זר: foreign supplier, self-invoice scenario
+  );
+exception when duplicate_object then null; end $$;
 
 alter table suppliers
   add column if not exists dealer_status supplier_dealer_status not null default 'registered';
