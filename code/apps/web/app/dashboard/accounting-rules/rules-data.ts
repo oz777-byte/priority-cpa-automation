@@ -81,6 +81,9 @@ export interface ExampleSpec {
 }
 
 export interface AccountingRule {
+  /** Sequential serial number for citation. Assigned automatically at module
+   * load time based on position in the RULES_RAW list. */
+  id: number;
   code: string;
   title: string;
   icon: LucideIcon;
@@ -95,7 +98,12 @@ export interface AccountingRule {
   perCompanyOverrides?: string[];
 }
 
-export const RULES: AccountingRule[] = [
+/**
+ * Raw rule list — IDs assigned automatically below. Order matters: the
+ * sequential ID (1..N) is the citation number used in audit logs and
+ * improvement-note references.
+ */
+const RULES_RAW: Omit<AccountingRule, 'id'>[] = [
   {
     code: 'STANDARD',
     title: 'חשבונית ספק רגילה',
@@ -467,33 +475,6 @@ export const RULES: AccountingRule[] = [
     rules: [
       'הייצוא חסום עד שיוסף מספר הקצאה',
       'אזהרה ויזואלית בעורך ה-JE',
-    ],
-  },
-
-  {
-    code: 'BANK_TRANSACTION',
-    title: 'תנועת בנק ישירה',
-    icon: Banknote,
-    status: 'coming-soon',
-    category: 'bank',
-    oneLiner: 'תשלום/קבלה ישירות בבנק — לא קשור לחשבונית ספק.',
-    description:
-      'עמלות בנק, ריבית, העברות פנימיות, משכורות. לא חשבונית ספק — תנועה בנקאית טהורה. תזוהה אוטומטית מחיבור Open Banking.',
-    triggers: ['תנועה ב-bank_transactions לא משויכת לחשבונית'],
-    jeStructure: 'משתנה לפי סוג התנועה. עמלה: DR הוצאות בנק / CR בנק. ריבית: DR בנק / CR הכנסות מימון.',
-    example: {
-      description: 'עמלת ניהול חשבון 25 ₪',
-      invoice: { number: '—', supplier: 'בנק', subtotal: 25, total: 25 },
-      je: [
-        { account: '522-0', side: 'DR', amount: '25.00', label: 'עמלות בנק' },
-        { account: '121-0', side: 'CR', amount: '25.00', label: 'בנק הפועלים' },
-      ],
-      notes: ['יבוא מ-Open Banking ישלוף תנועות אוטומטית — Phase 2'],
-    },
-    rules: ['בקרוב: חיבור Open Banking לבנקים ישראליים'],
-    perCompanyOverrides: [
-      'חשבונות בנק פעילים (פר-חברה, יכול להיות יותר מאחד)',
-      'חשבונות הוצאות בנק (פר-חברה)',
     ],
   },
 
@@ -1011,18 +992,19 @@ export const RULES: AccountingRule[] = [
     perCompanyOverrides: ['חשבון חובות אבודים (530-0)'],
   },
 
-  /* ────────────── תרחישים עתידיים — בנק ────────────── */
+  /* ────────────── תרחישי בנק · אשראי · מזומן ────────────── */
 
   {
-    code: 'BANK_FEES',
-    title: 'עמלות בנק',
+    code: 'BANK_FEE',
+    title: 'עמלת בנק',
     icon: Banknote,
-    status: 'coming-soon',
+    status: 'auto',
     category: 'bank',
-    oneLiner: 'עמלת ניהול / כרטיסים / OS — DR להוצאות בנק.',
-    description: 'עמלות שוטפות מהבנק ייווצרו אוטומטית מתנועות בנק לא משויכות.',
-    triggers: ['תנועת בנק שלילית עם תיאור "עמלה" / "ריבית"'],
-    jeStructure: '2 שורות: DR 522-0 עמלות בנק / CR 121-0 בנק.',
+    oneLiner: 'עמלת ניהול / שורה / כרטיסים — DR להוצאות בנק.',
+    description:
+      'עמלות שוטפות שמופיעות בדף הבנק (ניהול חשבון, שורת פעולה, כרטיסי אשראי). מזוהות בהתאמת בנק וזורמות ל-JE 2 שורות אוטומטית.',
+    triggers: ['תנועת בנק שלילית מסומנת כ-BANK_FEE בהתאמת בנק'],
+    jeStructure: '2 שורות: DR 522-0 עמלות בנק / CR בנק.',
     example: {
       description: 'עמלת ניהול חשבון 25 ₪',
       invoice: { subtotal: 25, total: 25 },
@@ -1030,20 +1012,27 @@ export const RULES: AccountingRule[] = [
         { account: '522-0', side: 'DR', amount: '25.00', label: 'עמלות בנק' },
         { account: '121-0', side: 'CR', amount: '25.00', label: 'בנק הפועלים' },
       ],
+      notes: ['ללא מע"מ — עמלות בנק פטורות'],
     },
-    rules: ['בקרוב: זיהוי אוטומטי לפי תיאור התנועה'],
+    rules: [
+      'איזון: סך חובה = סך זכות',
+      'אין רכיב מע"מ',
+      'חשבון בנק נלקח מהתאמת הבנק (פר-תנועה)',
+    ],
+    perCompanyOverrides: ['חשבון הוצאות בנק (522-0 ברירת מחדל)'],
   },
 
   {
-    code: 'BANK_INTEREST',
-    title: 'ריבית בנק',
+    code: 'INTEREST_INCOME',
+    title: 'ריבית זכות',
     icon: TrendingUp,
-    status: 'coming-soon',
+    status: 'auto',
     category: 'bank',
-    oneLiner: 'ריבית זכות (הכנסה) או חובה (הוצאה).',
-    description: 'ריבית זכות נכנסת ל-743-0; ריבית חובה (overdraft) נזקפת ל-624-0.',
-    triggers: ['תנועת בנק עם תיאור "ריבית"'],
-    jeStructure: 'זכות: DR בנק / CR ריבית זכות. חובה: DR ריבית הוצאה / CR בנק.',
+    oneLiner: 'ריבית בנק זכות — הכנסה לפי 743-0.',
+    description:
+      'תנועת בנק חיובית עם תיאור "ריבית זכות" — הכנסה ממימון. בעיקר בחשבונות חיסכון או פיקדון.',
+    triggers: ['תנועת בנק חיובית מסומנת כ-INTEREST_INCOME'],
+    jeStructure: '2 שורות: DR בנק / CR 743-0 הכנסות ריבית.',
     example: {
       description: 'ריבית זכות חודשית 50 ₪',
       invoice: { subtotal: 50, total: 50 },
@@ -1052,91 +1041,212 @@ export const RULES: AccountingRule[] = [
         { account: '743-0', side: 'CR', amount: '50.00', label: 'הכנסות ריבית' },
       ],
     },
-    rules: ['ריבית זכות חייבת במס מלא (אין מע"מ)'],
+    rules: [
+      'ריבית זכות חייבת במס מלא — אין רכיב מע"מ',
+      'מדווחת בדוח שנתי כהכנסה ממימון',
+    ],
   },
 
   {
-    code: 'BANK_TRANSFER',
-    title: 'העברה בין חשבונות בנק',
-    icon: RefreshCw,
-    status: 'coming-soon',
+    code: 'INTEREST_EXPENSE',
+    title: 'ריבית חובה (אוברדרפט)',
+    icon: TrendingDown,
+    status: 'auto',
     category: 'bank',
-    oneLiner: 'העברה פנימית בין חשבונות שלך — בלי השפעה על P&L.',
-    description: 'כששני חשבונות שייכים לאותה חברה. אין הכנסה / הוצאה.',
-    triggers: ['התאמה אוטומטית: יציאה מחשבון א + כניסה לחשבון ב באותו תאריך וסכום'],
-    jeStructure: '2 שורות: DR בנק יעד / CR בנק מקור.',
+    oneLiner: 'ריבית חובה / מסגרת אשראי — DR הוצאות מימון.',
+    description:
+      'תנועה שלילית עם תיאור "ריבית חובה" / "ריבית מסגרת" — הוצאת מימון.',
+    triggers: ['תנועת בנק שלילית מסומנת כ-INTEREST_EXPENSE'],
+    jeStructure: '2 שורות: DR 624-0 הוצאות מימון / CR בנק.',
     example: {
-      description: 'העברה 10000 ₪ מבנק הפועלים לבנק לאומי',
+      description: 'ריבית מסגרת חודשית 120 ₪',
+      invoice: { subtotal: 120, total: 120 },
+      je: [
+        { account: '624-0', side: 'DR', amount: '120.00', label: 'הוצאות מימון — ריבית' },
+        { account: '121-0', side: 'CR', amount: '120.00', label: 'בנק' },
+      ],
+    },
+    rules: ['ללא מע"מ', 'מותר בניכוי מלא במס הכנסה'],
+    perCompanyOverrides: ['חשבון הוצאות מימון (624-0 ברירת מחדל)'],
+  },
+
+  {
+    code: 'INTER_ACCOUNT_TRANSFER',
+    title: 'העברה בין חשבונות פנימיים',
+    icon: RefreshCw,
+    status: 'auto',
+    category: 'bank',
+    oneLiner: 'העברה בין שני חשבונות של אותה חברה — אין השפעה על P&L.',
+    description:
+      'תנועה משויכת לחשבון בנק/אשראי אחר באותה חברה (למשל בנק הפועלים → לאומי, או בנק → ארנק מזומן).',
+    triggers: ['בהתאמת בנק נבחר חשבון יעד פנימי כצד נגדי'],
+    jeStructure: '2 שורות: DR חשבון יעד / CR חשבון מקור.',
+    example: {
+      description: 'העברה 10,000 ₪ מבנק הפועלים לבנק לאומי',
       invoice: { subtotal: 10000, total: 10000 },
       je: [
         { account: '121-1', side: 'DR', amount: '10000.00', label: 'בנק לאומי' },
         { account: '121-0', side: 'CR', amount: '10000.00', label: 'בנק הפועלים' },
       ],
+      notes: ['אין הכנסה ואין הוצאה — רק תנועת מזומנים פנימית'],
     },
-    rules: ['בקרוב: זיהוי אוטומטי לפי matching'],
+    rules: [
+      'שני חשבונות חייבים להיות בכרטסת חשבונות הבנק/מזומן/אשראי של החברה',
+      'אסור להשתמש בתרחיש זה לתשלום ספק או קבלת לקוח',
+    ],
   },
 
   {
-    code: 'BAD_CHECK',
-    title: 'צ\'ק שחזר',
-    icon: AlertTriangle,
-    status: 'coming-soon',
+    code: 'CASH_DEPOSIT',
+    title: 'הפקדת מזומן לבנק',
+    icon: PiggyBank,
+    status: 'auto',
     category: 'bank',
-    oneLiner: 'צ\'ק לא נפרע — היפוך הקבלה + עמלת חזר.',
-    description: 'הבנק החזיר צ\'ק. יש לבטל את הקבלה הקודמת ולחייב את הלקוח שוב.',
-    triggers: ['תיאור "חזר ללא כיסוי" / "לא נפרע"'],
-    jeStructure: 'JE היפוך + עמלת חזר.',
+    oneLiner: 'הפקדה מקופה / ארנק מזומן לבנק.',
+    description:
+      'תנועה שמורידה מהקופה ומגדילה את הבנק. מזוהה אוטומטית כשתנועת בנק חיובית מסומנת כהפקדת מזומן.',
+    triggers: ['תנועת בנק חיובית מסומנת כ-CASH_DEPOSIT'],
+    jeStructure: '2 שורות: DR בנק / CR קופה (חשבון מזומן).',
     example: {
-      description: 'צ\'ק 1180 ₪ חזר',
-      invoice: { subtotal: 1180, total: 1180 },
+      description: 'הפקדת 2,000 ₪ מזומן לבנק',
+      invoice: { subtotal: 2000, total: 2000 },
+      je: [
+        { account: '121-0', side: 'DR', amount: '2000.00', label: 'בנק' },
+        { account: '110-0', side: 'CR', amount: '2000.00', label: 'קופה' },
+      ],
+    },
+    rules: ['חשבון קופה (110-0) חייב להיות מוגדר במאסטר חשבונות'],
+    perCompanyOverrides: ['חשבון קופה (110-0 ברירת מחדל)'],
+  },
+
+  {
+    code: 'CASH_WITHDRAWAL',
+    title: 'משיכת מזומן מהבנק',
+    icon: Wallet2,
+    status: 'auto',
+    category: 'bank',
+    oneLiner: 'משיכת מזומן מהבנק לקופה — הפוך מ-CASH_DEPOSIT.',
+    description: 'תנועה שלילית בבנק שעוברת לקופה.',
+    triggers: ['תנועת בנק שלילית מסומנת כ-CASH_WITHDRAWAL'],
+    jeStructure: '2 שורות: DR קופה / CR בנק.',
+    example: {
+      description: 'משיכת 500 ₪ מזומן מבנק',
+      invoice: { subtotal: 500, total: 500 },
+      je: [
+        { account: '110-0', side: 'DR', amount: '500.00', label: 'קופה' },
+        { account: '121-0', side: 'CR', amount: '500.00', label: 'בנק' },
+      ],
+    },
+    rules: ['אין השפעה על P&L'],
+  },
+
+  {
+    code: 'BOUNCED_CHECK',
+    title: 'צ\'ק שחזר ללא כיסוי',
+    icon: XCircle,
+    status: 'auto',
+    category: 'bank',
+    oneLiner: 'צ\'ק חזר — JE היפוך לקבלה הקודמת + עמלת חזר.',
+    description:
+      'הבנק החזיר צ\'ק שהופקד. ה-JE מבטל את הקבלה (הלקוח חוזר להיות חייב) ומחייב הוצאות בנק בעמלת חזר.',
+    triggers: ['תנועת בנק שלילית מסומנת כ-BOUNCED_CHECK'],
+    jeStructure: '3 שורות: DR לקוח (חוב חוזר) + DR עמלת חזר / CR בנק.',
+    example: {
+      description: 'צ\'ק 1,180 ₪ חזר + עמלת חזר 30 ₪',
+      invoice: { subtotal: 1180, total: 1210 },
       je: [
         { account: '120-1', side: 'DR', amount: '1180.00', label: 'לקוח (חוב חוזר)' },
         { account: '522-0', side: 'DR', amount: '30.00', label: 'עמלת חזר צ\'ק' },
         { account: '121-0', side: 'CR', amount: '1210.00', label: 'בנק' },
       ],
+      notes: ['חיוב הלקוח חוזר אוטומטית — נדרשת פעולת גבייה ידנית'],
     },
-    rules: ['בקרוב: התראה אוטומטית כשמזוהה צ\'ק שחזר'],
+    rules: [
+      'הקבלה המקורית לא נמחקת — היא מבוטלת על ידי JE היפוך',
+      'אזהרה אם אין לקוח מקושר לצ\'ק המקורי',
+    ],
   },
 
-  /* ────────────── תרחישים עתידיים — משכורות ────────────── */
+  {
+    code: 'CARD_CLEARING_FEE',
+    title: 'עמלת סליקת אשראי',
+    icon: CreditCard,
+    status: 'auto',
+    category: 'bank',
+    oneLiner: 'עמלה לחברת הסליקה (Tranzila / CardCom / Pelecard).',
+    description:
+      'בעת קבלת תשלום באשראי, חברת הסליקה גובה עמלה (~1.5%-3%). ה-JE רושם את ההפרש בין הסכום ברוטו לנטו שהתקבל בבנק.',
+    triggers: ['תנועת בנק חיובית של נטו סליקה — עמלה רשומה בנפרד מהמסלקה'],
+    jeStructure:
+      '3 שורות: DR בנק (נטו שהתקבל) + DR 525-0 עמלות סליקה / CR לקוח (סכום מלא).',
+    example: {
+      description: 'תקבול לקוח 1,000 ₪ — עמלת סליקה 25 ₪',
+      invoice: { subtotal: 1000, total: 1000 },
+      je: [
+        { account: '121-0', side: 'DR', amount: '975.00', label: 'בנק (נטו)' },
+        { account: '525-0', side: 'DR', amount: '25.00', label: 'עמלות סליקה' },
+        { account: '120-1', side: 'CR', amount: '1000.00', label: 'לקוח' },
+      ],
+      notes: ['העמלה מותרת בניכוי מלא במס הכנסה'],
+    },
+    rules: ['חישוב עמלה: ברוטו - נטו', 'אין מע"מ נפרד — חברת הסליקה כוללת אותו'],
+    perCompanyOverrides: ['חשבון עמלות סליקה (525-0 ברירת מחדל)'],
+  },
+
+  /* ────────────── תרחישי משכורות ────────────── */
 
   {
     code: 'PAYROLL_MONTHLY',
-    title: 'משכורת חודשית',
+    title: 'משכורת חודשית — ניכויים ונטו',
     icon: UsersIcon,
-    status: 'coming-soon',
+    status: 'auto',
     category: 'payroll',
-    oneLiner: 'JE 5-7 שורות מתלוש שכר — שכר ברוטו, ניכויים, נטו.',
-    description: 'נטען מקובץ תלוש שכר (CSV/JSON). מפרט שכר ברוטו, ביטוח לאומי, מס הכנסה, פנסיה, השתלמות, ונטו לעובד.',
-    triggers: ['ייבוא תלוש שכר חודשי'],
-    jeStructure: '5-7 שורות. DR שכר ברוטו, CR ניכויים שונים + נטו.',
+    oneLiner: 'JE מתלוש שכר חודשי — שכר ברוטו DR מול ניכויים + נטו CR.',
+    description:
+      'נטען מקובץ תלוש שכר (CSV/JSON) או הזנה ידנית. ה-JE רושם את כל מרכיבי הברוטו ב-DR (שכר, רכב, נסיעות, בונוסים) ובצד הזכות פותח התחייבויות נפרדות לכל גורם ניכוי: ביטוח לאומי, מס הכנסה, פנסיית עובד, השתלמות עובד, ונטו לעובד.',
+    triggers: ['ייבוא / הזנת payroll_entry חודשי לעובד'],
+    jeStructure:
+      '5-8 שורות. DR שכר ברוטו (אחד או יותר) / CR ביטוח לאומי + מס הכנסה + פנסיה (עובד) + השתלמות (עובד) + נטו לעובד.',
     example: {
-      description: 'משכורת מאי 2026 — שכר ברוטו 15,000',
+      description: 'משכורת חודשית — שכר ברוטו 15,000 ₪',
       invoice: { subtotal: 15000, total: 15000 },
       je: [
         { account: '600-0', side: 'DR', amount: '15000.00', label: 'שכר ברוטו' },
-        { account: '230-1', side: 'CR', amount: '1500.00', label: 'ביטוח לאומי' },
+        { account: '230-1', side: 'CR', amount: '1500.00', label: 'ביטוח לאומי (עובד)' },
         { account: '230-2', side: 'CR', amount: '2500.00', label: 'מס הכנסה' },
         { account: '230-3', side: 'CR', amount: '900.00', label: 'פנסיה (עובד)' },
         { account: '230-4', side: 'CR', amount: '450.00', label: 'השתלמות (עובד)' },
         { account: '230-9', side: 'CR', amount: '9650.00', label: 'נטו לעובד' },
       ],
+      notes: ['JE נוצר אוטומטית אחרי שמירת תלוש דרך מסך משכורות'],
     },
-    rules: ['בקרוב: ייבוא ישיר מ-Hilan / Michpal / Synel'],
+    rules: [
+      'איזון: סך הברוטו = סך הניכויים + נטו',
+      'תאריך אסמכתא = סוף החודש שאליו מתייחסת המשכורת',
+      'כל עובד מקבל JE נפרד (לא מאוחד)',
+      'אם תלוש מסומן is_split — נוצרים 3 JEs: עובד + מעביד + תשלום',
+    ],
+    perCompanyOverrides: [
+      'חשבון שכר ברוטו (600-0 ברירת מחדל)',
+      'חשבון התחייבויות לעובדים (230-9)',
+      'חשבונות גורמי ניכוי (230-1..230-4)',
+    ],
   },
 
   {
     code: 'PAYROLL_EMPLOYER',
     title: 'הפרשות מעביד',
     icon: Briefcase,
-    status: 'coming-soon',
+    status: 'auto',
     category: 'payroll',
-    oneLiner: 'תוספת ביטוח לאומי + פנסיה + השתלמות בעלות המעביד.',
-    description: 'JE נפרד להפרשות מעסיק (לא מנוכה משכר העובד).',
-    triggers: ['ייבוא תלוש שכר עם הפרשות מעביד'],
-    jeStructure: 'DR הוצאות סוציאליות / CR התחייבויות לרשויות.',
+    oneLiner: 'JE נפרד להפרשות מעסיק — לא מנוכות מהעובד אלא נוספות לעלות.',
+    description:
+      'הפרשות שהמעביד משלם בנוסף לשכר: ביטוח לאומי מעביד, פנסיה מעביד, השתלמות מעביד, פיצויים. ה-JE יוצר הוצאה סוציאלית מול התחייבויות לאותם גופים.',
+    triggers: ['payroll_entry עם רכיבי employer_* (ביטוח/פנסיה/השתלמות/פיצויים מעביד)'],
+    jeStructure:
+      '4-5 שורות: DR 601-0 הוצאות סוציאליות / CR ביטוח לאומי מעביד + פנסיה מעביד + השתלמות מעביד + פיצויים מעביד.',
     example: {
-      description: 'הפרשות מעביד מאי 2026',
+      description: 'הפרשות מעביד על משכורת 15,000 ₪',
       invoice: { subtotal: 4500, total: 4500 },
       je: [
         { account: '601-0', side: 'DR', amount: '4500.00', label: 'הוצאות סוציאליות' },
@@ -1145,29 +1255,38 @@ export const RULES: AccountingRule[] = [
         { account: '230-4', side: 'CR', amount: '750.00', label: 'השתלמות (מעביד)' },
         { account: '230-5', side: 'CR', amount: '1650.00', label: 'פיצויים (מעביד)' },
       ],
+      notes: ['בנפרד מ-PAYROLL_MONTHLY כדי שהדוח יראה ברור עלות שכר אמיתית'],
     },
-    rules: ['בקרוב'],
+    rules: [
+      'מתבצע באותו תאריך ערך כמו תלוש העובד',
+      'אם is_split=false — מאוחד לתוך JE אחד עם תרחיש PAYROLL_MONTHLY',
+    ],
+    perCompanyOverrides: ['חשבון הוצאות סוציאליות (601-0 ברירת מחדל)'],
   },
 
   {
     code: 'PAYROLL_PAYMENT',
     title: 'תשלום משכורת לעובד',
     icon: HandCoins,
-    status: 'coming-soon',
+    status: 'auto',
     category: 'payroll',
-    oneLiner: 'העברה נטו לעובד — סוגרת התחייבות.',
-    description: 'העברה בפועל מהבנק לחשבון העובד.',
-    triggers: ['תנועת בנק להעברת משכורת'],
-    jeStructure: 'DR נטו לעובד / CR בנק.',
+    oneLiner: 'העברה בפועל מהבנק — סוגרת התחייבות "נטו לעובד".',
+    description:
+      'אחרי ה-JE של תלוש המשכורת, נשארת התחייבות פתוחה ב-230-9. JE התשלום סוגר את ההתחייבות ומגיב מהבנק.',
+    triggers: ['תנועת בנק שלילית מסומנת כ-PAYROLL_PAYMENT', 'או הפעלה ידנית מ"שלם משכורת"'],
+    jeStructure: '2 שורות: DR 230-9 נטו לעובד (סגירה) / CR בנק.',
     example: {
-      description: 'תשלום משכורת לעובד',
+      description: 'תשלום נטו לעובד 9,650 ₪',
       invoice: { subtotal: 9650, total: 9650 },
       je: [
         { account: '230-9', side: 'DR', amount: '9650.00', label: 'נטו לעובד (סגירה)' },
         { account: '121-0', side: 'CR', amount: '9650.00', label: 'בנק' },
       ],
     },
-    rules: ['בקרוב'],
+    rules: [
+      'JE זה אסור אם אין יתרה פתוחה ב-230-9 לעובד',
+      'יוצא לדף הבנק להתאמה אוטומטית',
+    ],
   },
 
   /* ────────────── תרחישים עתידיים — נכסי קבע ────────────── */
@@ -1419,6 +1538,36 @@ export const RULES: AccountingRule[] = [
   },
 
   {
+    code: 'YEAR_END_CLOSE_VAT',
+    title: 'סגירת חשבונות מע"מ',
+    icon: Percent,
+    status: 'coming-soon',
+    category: 'year-end',
+    oneLiner: 'איפוס מע"מ תשומות מול מע"מ עסקאות לסוף שנה.',
+    description:
+      'בסוף השנה, חשבונות מע"מ תשומות (205-2) ומע"מ עסקאות (220-0) מתקזזים. ההפרש (חוב או יתרה לרשות המסים) מועבר לחשבון "מע"מ לתשלום / לקבל".',
+    triggers: ['ריצת סגירת שנה', 'אחרי דיווח 874 האחרון של השנה'],
+    jeStructure:
+      '3 שורות: DR מע"מ עסקאות (סגירה) + DR/CR מע"מ לתשלום / מע"מ להחזר (הפרש) / CR מע"מ תשומות (סגירה).',
+    example: {
+      description: 'מע"מ תשומות 50K, מע"מ עסקאות 70K — חוב 20K לרשות המסים',
+      invoice: { subtotal: 70000, total: 70000 },
+      je: [
+        { account: '220-0', side: 'DR', amount: '70000.00', label: 'מע"מ עסקאות (סגירה)' },
+        { account: '205-2', side: 'CR', amount: '50000.00', label: 'מע"מ תשומות (סגירה)' },
+        { account: '230-7', side: 'CR', amount: '20000.00', label: 'מע"מ לתשלום' },
+      ],
+      notes: ['אם תשומות > עסקאות — DR מע"מ להחזר במקום CR מע"מ לתשלום'],
+    },
+    rules: [
+      'בקרוב — אחרי בניית engine סגירת שנה',
+      'מתבצע רק אחרי סגירת תקופת דצמבר',
+      'ריצה אחת לשנה',
+    ],
+    perCompanyOverrides: ['חשבון מע"מ לתשלום (230-7 ברירת מחדל)'],
+  },
+
+  {
     code: 'YEAR_END_TRANSFER_PROFIT',
     title: 'העברת רווח/הפסד ליתרת רווחים',
     icon: TrendingUp,
@@ -1439,3 +1588,12 @@ export const RULES: AccountingRule[] = [
     rules: ['בקרוב'],
   },
 ];
+
+/**
+ * Final rule list with sequential IDs assigned by position.
+ * The ID is the citation number — used in audit logs and improvement-note refs.
+ */
+export const RULES: AccountingRule[] = RULES_RAW.map((r, i) => ({
+  ...r,
+  id: i + 1,
+}));

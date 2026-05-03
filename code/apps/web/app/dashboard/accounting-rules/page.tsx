@@ -23,6 +23,7 @@ import {
   type RuleCategory,
   type ExampleSpec,
 } from './rules-data';
+import { RuleNoteForm } from './note-form';
 
 type FilterKey = 'all' | RuleStatus;
 
@@ -316,6 +317,12 @@ function RuleRow({
         {/* Title + meta */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
+            <span
+              className="text-[10px] font-mono tabular-nums px-1.5 py-0.5 bg-accent-50 text-accent-700 border border-accent-100 rounded"
+              dir="ltr"
+            >
+              #{rule.id}
+            </span>
             <span className="font-medium text-ink-900 text-sm">{rule.title}</span>
             <code
               className="text-[10px] font-mono px-1.5 py-0.5 bg-ink-100 text-ink-600 rounded"
@@ -401,6 +408,20 @@ function RuleDetail({ rule }: { rule: AccountingRule }) {
           <DetailBlock icon={BookOpen} title="דוגמה מספרית" tone="accent">
             <Example example={rule.example} />
           </DetailBlock>
+        </div>
+      </div>
+
+      {/* Improvement note submission */}
+      <div className="pt-2 border-t border-ink-100">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+          <div className="text-[11px] text-ink-500 leading-relaxed">
+            רואה משהו שאפשר לשפר בחוק זה? שלח הערה — היא תגיע לעוז ותטופל אישית.
+          </div>
+          <RuleNoteForm
+            ruleId={rule.id}
+            ruleCode={rule.code}
+            ruleTitle={rule.title}
+          />
         </div>
       </div>
     </div>

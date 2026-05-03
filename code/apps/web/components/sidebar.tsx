@@ -344,11 +344,23 @@ function UserBlock({
               href="/dashboard/admin/users"
               onClick={() => setOpen(false)}
               className={`flex items-center gap-2 px-3 py-1.5 hover:bg-ink-50 ${
-                pathname.startsWith('/dashboard/admin') ? 'bg-accent-500/10 text-accent-600' : 'text-ink-800'
+                pathname === '/dashboard/admin/users' ? 'bg-accent-500/10 text-accent-600' : 'text-ink-800'
               }`}
             >
               <Users size={13} />
               משתמשי המערכת
+            </Link>
+          )}
+          {isAdmin && (
+            <Link
+              href="/dashboard/admin/rule-notes"
+              onClick={() => setOpen(false)}
+              className={`flex items-center gap-2 px-3 py-1.5 hover:bg-ink-50 ${
+                pathname === '/dashboard/admin/rule-notes' ? 'bg-accent-500/10 text-accent-600' : 'text-ink-800'
+              }`}
+            >
+              <BookOpen size={13} />
+              הערות שיפור חוקים
             </Link>
           )}
           <div className="border-t border-ink-100 my-1" />
