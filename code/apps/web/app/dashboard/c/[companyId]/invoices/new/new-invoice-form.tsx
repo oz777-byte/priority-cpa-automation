@@ -227,11 +227,20 @@ export function NewInvoiceForm({
                 label='קטגוריית הוצאה'
                 options={[
                   { value: '', label: 'מנוכה במלואו (סטנדרטי)' },
-                  { value: 'vehicle', label: 'רכב — 2/3 מנוכה' },
-                  { value: 'meals', label: 'אש"ל / מתנות — 1/4 מנוכה' },
-                  { value: 'non_deductible', label: 'לא מנוכה כלל' },
+                  { value: 'vehicle', label: 'רכב פרטי M1 — 2/3 מנוכה' },
+                  { value: 'commercial_vehicle', label: 'רכב מסחרי N1 / טנדר — 100% מנוכה' },
+                  { value: 'motorcycle_small', label: 'אופנוע ≤125 סמ"ק — 100% מנוכה' },
+                  { value: 'motorcycle_large', label: 'אופנוע >125 סמ"ק — 2/3 מנוכה' },
+                  { value: 'mobile_phone_full_business', label: 'נייד עסקי בלבד — 100% מנוכה' },
+                  { value: 'mobile_phone_partial', label: 'נייד מעורב (רוב עסקי) — 2/3 מנוכה' },
+                  { value: 'mobile_phone_personal_majority', label: 'נייד מעורב (רוב פרטי) — 1/3 מנוכה' },
+                  { value: 'meals', label: 'אש"ל רגיל — 1/4 מנוכה' },
+                  { value: 'late_meals', label: 'ארוחות לאחר 8 שעות — 100% מנוכה' },
+                  { value: 'gifts_above_threshold', label: 'מתנות מעל הרף (~210₪/שנה) — 0%' },
+                  { value: 'foreign_trip', label: 'נסיעות חו"ל — 0%' },
+                  { value: 'non_deductible', label: 'לא מנוכה כלל — 0%' },
                 ]}
-                hint='המערכת תפצל את ה-JE לחלק מנוכה ולחלק לא-מנוכה'
+                hint='המערכת תפצל את ה-JE לחלק מנוכה ולחלק לא-מנוכה (אם רלוונטי)'
               />
             </Section>
 

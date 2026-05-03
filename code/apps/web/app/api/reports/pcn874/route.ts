@@ -275,6 +275,10 @@ export async function POST(request: NextRequest) {
   const year = Number(body.year);
   const month = Number(body.month);
   const lockPeriod: boolean = body.lockPeriod !== false; // default true
+  const correctionReason: string | null =
+    typeof body.correctionReason === 'string' && body.correctionReason.trim().length > 0
+      ? body.correctionReason.trim()
+      : null;
 
   if (!companyId) {
     return NextResponse.json({ error: 'companyId required' }, { status: 400 });
@@ -289,6 +293,29 @@ export async function POST(request: NextRequest) {
   try {
     const { vatId, inputs, sales, warnings } = await gather(company.id, year, month);
     const result = buildPcn874({ vatId, year, month, inputs, sales });
+
+    // Detect if this is a correction: prior export(s) exist for the same period.
+    const { data: priorExports } = await admin
+      .from('pcn874_exports')
+      .select('id, correction_sequence')
+      .eq('company_id', company.id)
+      .eq('year', year)
+      .eq('month', month)
+      .order('correction_sequence', { ascending: false })
+      .limit(1);
+    const priorMostRecent = (priorExports?.[0] ?? null) as { id: string; correction_sequence: number } | null;
+    const isCorrection = !!priorMostRecent;
+    const correctionSequence = priorMostRecent ? priorMostRecent.correction_sequence + 1 : 0;
+
+    if (isCorrection && !correctionReason) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `דיווח 874 לתקופה ${month}/${year} כבר קיים. תיקון דורש סיבה (correctionReason).`,
+        },
+        { status: 400 },
+      );
+    }
 
     let periodLockedNow = false;
     if (lockPeriod) {
@@ -311,7 +338,9 @@ export async function POST(request: NextRequest) {
               status: 'locked',
               locked_at: new Date().toISOString(),
               locked_by: me.id,
-              notes: `נעילה אוטומטית עקב הפקת PCN874 (${result.summary.vatToPay >= 0 ? 'לתשלום' : 'להחזר'} ${Math.abs(result.summary.vatToPay).toFixed(2)} ₪)`,
+              notes: isCorrection
+                ? `נעילה לאחר תיקון 874 (תיקון #${correctionSequence}) — ${result.summary.vatToPay >= 0 ? 'לתשלום' : 'להחזר'} ${Math.abs(result.summary.vatToPay).toFixed(2)} ₪`
+                : `נעילה אוטומטית עקב הפקת PCN874 (${result.summary.vatToPay >= 0 ? 'לתשלום' : 'להחזר'} ${Math.abs(result.summary.vatToPay).toFixed(2)} ₪)`,
             },
             { onConflict: 'company_id,year,month' },
           );
@@ -320,25 +349,53 @@ export async function POST(request: NextRequest) {
     }
 
     const fileMd5 = md5(result.buffer);
-    await admin.from('pcn874_exports').insert({
-      company_id: company.id,
-      year,
-      month,
-      total_inputs_subtotal: result.summary.totalInputsSubtotal,
-      total_inputs_vat: result.summary.totalInputsVat,
-      total_sales_subtotal: result.summary.totalSalesSubtotal,
-      total_sales_vat: result.summary.totalSalesVat,
-      vat_to_pay: result.summary.vatToPay,
-      je_count: result.summary.inputsCount + result.summary.salesCount,
-      file_content: result.text,
-      file_md5: fileMd5,
-      file_byte_size: result.buffer.byteLength,
-      generated_by: me.id,
-      period_locked_by_this: periodLockedNow,
-    });
+    const { data: insertedExport } = await admin
+      .from('pcn874_exports')
+      .insert({
+        company_id: company.id,
+        year,
+        month,
+        total_inputs_subtotal: result.summary.totalInputsSubtotal,
+        total_inputs_vat: result.summary.totalInputsVat,
+        total_sales_subtotal: result.summary.totalSalesSubtotal,
+        total_sales_vat: result.summary.totalSalesVat,
+        vat_to_pay: result.summary.vatToPay,
+        je_count: result.summary.inputsCount + result.summary.salesCount,
+        file_content: result.text,
+        file_md5: fileMd5,
+        file_byte_size: result.buffer.byteLength,
+        generated_by: me.id,
+        period_locked_by_this: periodLockedNow,
+        is_correction: isCorrection,
+        ...(isCorrection
+          ? {
+              correction_of_id: priorMostRecent!.id,
+              correction_sequence: correctionSequence,
+              correction_reason: correctionReason,
+            }
+          : {}),
+      })
+      .select('id')
+      .single();
+
+    // Close any open period_reopens for this period — link to the new export.
+    if (isCorrection && insertedExport?.id) {
+      await admin
+        .from('period_reopens')
+        .update({
+          closed_at: new Date().toISOString(),
+          closed_by: me.id,
+          resulting_export_id: insertedExport.id,
+        })
+        .eq('company_id', company.id)
+        .eq('year', year)
+        .eq('month', month)
+        .is('closed_at', null);
+    }
 
     const safeName = company.name.replace(/[^a-zA-Z0-9]/g, '_');
-    const filename = `pcn874-${safeName}-${year}${String(month).padStart(2, '0')}.txt`;
+    const correctionSuffix = isCorrection ? `-CORRECTION-${correctionSequence}` : '';
+    const filename = `pcn874-${safeName}-${year}${String(month).padStart(2, '0')}${correctionSuffix}.txt`;
 
     // The file is binary (Windows-1255), but Next/NextResponse accepts ArrayBuffer.
     return new NextResponse(new Uint8Array(result.buffer), {
@@ -349,6 +406,8 @@ export async function POST(request: NextRequest) {
         'X-PCN874-MD5': fileMd5,
         'X-PCN874-Period-Locked': periodLockedNow ? '1' : '0',
         'X-PCN874-Warnings': String(warnings.length),
+        'X-PCN874-Is-Correction': isCorrection ? '1' : '0',
+        'X-PCN874-Correction-Sequence': String(correctionSequence),
       },
     });
   } catch (err) {

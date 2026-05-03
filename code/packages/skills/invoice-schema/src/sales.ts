@@ -37,6 +37,8 @@ export const SalesScenarioSchema = z.enum([
   'AR_ADVANCE',
   /** חוב אבוד — DR חובות אבודים / CR customer; reverses revenue */
   'AR_BAD_DEBT',
+  /** הנחה לאחר חשבונית — partial reversal: DR revenue + DR output VAT / CR customer */
+  'AR_POST_INVOICE_DISCOUNT',
 ]);
 export type SalesScenario = z.infer<typeof SalesScenarioSchema>;
 
@@ -118,6 +120,8 @@ export const SalesInvoiceHeaderSchema = z
     vat_exempt_reason: z.string().optional(),
     /** AR_BAD_DEBT only: reference to original invoice being written off. */
     bad_debt_original_invoice: z.string().optional(),
+    /** AR_POST_INVOICE_DISCOUNT only: reference to original invoice being discounted post-issue. */
+    post_discount_original_invoice: z.string().optional(),
   })
   .passthrough();
 export type SalesInvoiceHeader = z.infer<typeof SalesInvoiceHeaderSchema>;

@@ -21,6 +21,16 @@ interface DBExport {
   generated_at: string;
   period_locked_by_this: boolean;
   notes: string | null;
+  is_correction: boolean;
+  correction_of_id: string | null;
+  correction_sequence: number;
+  correction_reason: string | null;
+}
+
+interface DBPeriod {
+  year: number;
+  month: number;
+  status: 'open' | 'locked' | 'closed';
 }
 
 export default async function Pcn874Page({
@@ -37,7 +47,8 @@ export default async function Pcn874Page({
     .select(
       'id, year, month, total_inputs_subtotal, total_inputs_vat, ' +
         'total_sales_subtotal, total_sales_vat, vat_to_pay, je_count, ' +
-        'file_md5, file_byte_size, generated_at, period_locked_by_this, notes',
+        'file_md5, file_byte_size, generated_at, period_locked_by_this, notes, ' +
+        'is_correction, correction_of_id, correction_sequence, correction_reason',
     )
     .eq('company_id', company.id)
     .order('generated_at', { ascending: false })
@@ -57,7 +68,26 @@ export default async function Pcn874Page({
     bytes: e.file_byte_size,
     generatedAt: e.generated_at,
     autoLocked: e.period_locked_by_this,
+    isCorrection: e.is_correction,
+    correctionSequence: e.correction_sequence,
+    correctionReason: e.correction_reason,
   }));
+
+  // Pull periods that have a 874 already + whether they're locked, so the panel
+  // can offer "reopen for correction" only on locked periods that have a prior export.
+  const { data: periodsRaw } = await admin
+    .from('accounting_periods')
+    .select('year, month, status')
+    .eq('company_id', company.id);
+  const periodLockedSet = new Set<string>();
+  for (const p of (periodsRaw ?? []) as DBPeriod[]) {
+    if (p.status === 'locked' || p.status === 'closed') {
+      periodLockedSet.add(`${p.year}-${p.month}`);
+    }
+  }
+  const correctableExports: ExportRow[] = rows.filter(
+    (r) => periodLockedSet.has(`${r.year}-${r.month}`) && !r.isCorrection,
+  );
 
   return (
     <div className="space-y-5">
@@ -79,7 +109,12 @@ export default async function Pcn874Page({
         דיווח מקוון 874" ובצע ריצת בדיקה במערכת שע"מ.
       </div>
 
-      <Pcn874Panel companyId={company.id} history={rows} />
+      <Pcn874Panel
+        companyId={company.id}
+        history={rows}
+        correctableExports={correctableExports}
+        lockedPeriods={Array.from(periodLockedSet)}
+      />
     </div>
   );
 }

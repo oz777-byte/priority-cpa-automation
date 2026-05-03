@@ -59,7 +59,22 @@ const Input = z.object({
     .transform((v) => v === 'on' || v === 'true'),
   paymentMethod: z.enum(['credit', 'cash', 'card', 'transfer']).optional(),
   withholdingPercent: z.coerce.number().min(0).max(100).optional(),
-  mixedDeductionCategory: z.enum(['vehicle', 'meals', 'non_deductible']).optional(),
+  mixedDeductionCategory: z
+    .enum([
+      'vehicle',
+      'meals',
+      'non_deductible',
+      'commercial_vehicle',
+      'motorcycle_small',
+      'motorcycle_large',
+      'mobile_phone_full_business',
+      'mobile_phone_partial',
+      'mobile_phone_personal_majority',
+      'gifts_above_threshold',
+      'late_meals',
+      'foreign_trip',
+    ])
+    .optional(),
   fxRate: z.coerce.number().positive().optional(),
   costCenter: z.string().max(20).optional(),
   // Up to two expense splits for MULTI_EXPENSE scenarios.

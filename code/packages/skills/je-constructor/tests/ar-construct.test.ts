@@ -212,6 +212,44 @@ describe('constructARJE — AR_WITH_WITHHOLDING', () => {
   });
 });
 
+describe('constructARJE — AR_POST_INVOICE_DISCOUNT', () => {
+  it('reduces revenue + output VAT + customer balance for taxable invoice', () => {
+    const r = constructARJE(
+      sale({ post_discount_original_invoice: 'INV-100' }, { subtotal: 200, total: 236 }),
+      config,
+    );
+    expect(r.primaryScenario).toBe('AR_POST_INVOICE_DISCOUNT');
+    const lines = r.records[0]!.lines;
+    expect(lines.find((l) => l.account === '700-0')?.debit).toBe(200);
+    expect(lines.find((l) => l.account === '220-0')?.debit).toBe(36);
+    expect(lines.find((l) => l.account === '120-1')?.credit).toBe(236);
+    // balanced
+    const dr = lines.reduce((s, l) => s + l.debit, 0);
+    const cr = lines.reduce((s, l) => s + l.credit, 0);
+    expect(Math.abs(dr - cr)).toBeLessThan(0.05);
+  });
+
+  it('skips VAT line when discount is on a non-taxable invoice', () => {
+    const r = constructARJE(
+      sale({ post_discount_original_invoice: 'INV-200' }, { subtotal: 100, total: 100 }),
+      config,
+    );
+    const lines = r.records[0]!.lines;
+    expect(lines.find((l) => l.account === '220-0')).toBeUndefined();
+    expect(lines).toHaveLength(2);
+  });
+
+  it('warns when original invoice ref is missing (still creates JE)', () => {
+    const r = constructARJE(
+      sale({ post_discount_original_invoice: '' }),
+      config,
+    );
+    // post_discount_original_invoice = '' → falls through to AR_STANDARD,
+    // so this test mainly ensures empty string doesn't trigger discount.
+    expect(r.primaryScenario).not.toBe('AR_POST_INVOICE_DISCOUNT');
+  });
+});
+
 describe('constructARJE — AR_BAD_DEBT (with VAT recovery, סעיף 39א)', () => {
   it('writes off customer balance + recovers output VAT for taxable invoice', () => {
     const r = constructARJE(

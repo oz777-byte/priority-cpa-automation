@@ -48,6 +48,7 @@ function detectARScenario(invoice: SalesInvoice): SalesScenario {
 
   // doc_type === 'tax_invoice' from here — primary picks based on flags
   if (invoice.invoice.bad_debt_original_invoice) return 'AR_BAD_DEBT';
+  if (invoice.invoice.post_discount_original_invoice) return 'AR_POST_INVOICE_DISCOUNT';
   if (invoice.invoice.export_country) return 'AR_EXPORT';
   if (invoice.invoice.vat_exempt_reason) return 'AR_VAT_EXEMPT';
   if (invoice.invoice.currency !== 'ILS') return 'AR_FOREIGN_CURRENCY';
@@ -101,6 +102,8 @@ function runBuilder(
       return [buildAdvance(invoice, config, warnings)];
     case 'AR_BAD_DEBT':
       return [buildBadDebt(invoice, config, warnings)];
+    case 'AR_POST_INVOICE_DISCOUNT':
+      return [buildPostInvoiceDiscount(invoice, config, warnings)];
   }
 }
 
@@ -669,6 +672,74 @@ function buildBadDebt(
             'תנאי לזכאות: עד 3 שנים מהחשבונית, חוב נדרש בפועל ולא נגבה',
           ]
         : ['חשבונית פטורה — אין מע"מ להשבה']),
+    ],
+  };
+}
+
+/**
+ * AR_POST_INVOICE_DISCOUNT — הנחה לאחר הפקת חשבונית.
+ *
+ * Use case: a customer was already invoiced, then later receives a discount
+ * (settlement, goodwill, late payment incentive). Different from a credit
+ * note (which fully reverses an invoice) — this is a partial reduction.
+ *
+ *   DR  revenue              discount_subtotal     (reduce revenue)
+ *   DR  output_vat           discount_vat          (reduce output VAT liability)
+ *   CR  customer             discount_total        (reduce customer balance)
+ *
+ * The discount amount is the invoice's totals (subtotal + vat = total).
+ * For income tax: revenue is reduced. For VAT: output VAT is reduced
+ * (will reflect in the next PCN874).
+ *
+ * Note: this is similar in shape to CREDIT_NOTE but logically distinct —
+ * the original invoice stays valid, only the amount is adjusted.
+ */
+function buildPostInvoiceDiscount(
+  invoice: SalesInvoice,
+  config: ARConstructorConfig,
+  warnings: string[],
+): ARJERecord {
+  const subtotal = invoice.totals.subtotal;
+  const total = invoice.totals.total;
+  const vat = vatFromTotals(invoice);
+
+  if (subtotal <= 0) {
+    warnings.push(
+      'AR_POST_INVOICE_DISCOUNT: סכום הנחה אפס או שלילי — בדוק את החשבונית.',
+    );
+  }
+  if (!invoice.invoice.post_discount_original_invoice) {
+    warnings.push(
+      'AR_POST_INVOICE_DISCOUNT: לא צוין מספר חשבונית מקורית — הזיכוי לא יתקשר חזרה לחשבונית.',
+    );
+  }
+
+  const lines: ARJELine[] = [];
+
+  // Revenue reduction (always — for taxable, this is the subtotal portion).
+  lines.push({ account: config.revenueAccount, debit: subtotal, credit: 0 });
+
+  // Output VAT reduction — only if there is VAT.
+  if (vat > 0) {
+    lines.push({ account: config.outputVatAccount, debit: vat, credit: 0 });
+  }
+
+  // Customer balance reduction.
+  lines.push({
+    account: invoice.customer.internal_code_priority,
+    debit: 0,
+    credit: total,
+  });
+
+  return {
+    ...baseHeader(invoice, config, 'AR_POST_INVOICE_DISCOUNT'),
+    details: `הנחה לאחר חשבונית — ${invoice.invoice.post_discount_original_invoice ?? invoice.invoice.number}`,
+    recordIndex: 0,
+    lines,
+    notes: [
+      `הנחה ללקוח ${invoice.customer.name}: ${total.toFixed(2)} ₪`,
+      `החזר מע"מ עסקאות: ${vat.toFixed(2)} ₪ — יקוזז אוטומטית ב-PCN874`,
+      'החשבונית המקורית נשארת בתוקף — רק הסכום הופחת',
     ],
   };
 }
