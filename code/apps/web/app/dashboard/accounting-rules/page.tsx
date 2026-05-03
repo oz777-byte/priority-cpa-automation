@@ -15,7 +15,14 @@ import {
   Lightbulb,
 } from 'lucide-react';
 import { PageHeader } from '@/components/page-header';
-import { RULES, type AccountingRule, type RuleStatus, type ExampleSpec } from './rules-data';
+import {
+  RULES,
+  CATEGORY_LABELS,
+  type AccountingRule,
+  type RuleStatus,
+  type RuleCategory,
+  type ExampleSpec,
+} from './rules-data';
 
 type FilterKey = 'all' | RuleStatus;
 
@@ -142,32 +149,69 @@ export default function AccountingRulesPage() {
         />
       </div>
 
-      {/* Rules list — compact, expandable */}
-      <div className="bg-white border border-ink-200 rounded-xl overflow-hidden">
-        {filtered.length === 0 ? (
-          <div className="p-12 text-center text-ink-500 text-sm">
-            לא נמצאו חוקים תואמים את החיפוש.
-          </div>
-        ) : (
-          <ul className="divide-y divide-ink-100">
-            {filtered.map((rule) => (
-              <RuleRow
-                key={rule.code}
-                rule={rule}
-                isOpen={openCode === rule.code}
-                onToggle={() =>
-                  setOpenCode((prev) => (prev === rule.code ? null : rule.code))
-                }
-              />
-            ))}
-          </ul>
-        )}
-      </div>
+      {/* Rules grouped by category */}
+      {filtered.length === 0 ? (
+        <div className="bg-white border border-ink-200 rounded-xl p-12 text-center text-ink-500 text-sm">
+          לא נמצאו חוקים תואמים את החיפוש.
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {groupByCategory(filtered).map(([category, rules]) => (
+            <section key={category}>
+              <h2 className="text-xs font-bold uppercase tracking-wider text-ink-700 mb-2 px-1 flex items-center gap-2">
+                {CATEGORY_LABELS[category]}
+                <span className="text-[10px] font-medium text-ink-400 tabular-nums">
+                  {rules.length}
+                </span>
+              </h2>
+              <div className="bg-white border border-ink-200 rounded-xl overflow-hidden">
+                <ul className="divide-y divide-ink-100">
+                  {rules.map((rule) => (
+                    <RuleRow
+                      key={rule.code}
+                      rule={rule}
+                      isOpen={openCode === rule.code}
+                      onToggle={() =>
+                        setOpenCode((prev) => (prev === rule.code ? null : rule.code))
+                      }
+                    />
+                  ))}
+                </ul>
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
 
-      <div className="text-xs text-ink-400 text-center mt-4">
+      <div className="text-xs text-ink-400 text-center mt-6">
         מציג {filtered.length} מתוך {RULES.length} חוקים
       </div>
     </div>
+  );
+}
+
+const CATEGORY_ORDER: RuleCategory[] = [
+  'supplier',
+  'customer',
+  'bank',
+  'payroll',
+  'assets',
+  'inventory',
+  'period',
+  'year-end',
+];
+
+function groupByCategory(
+  rules: AccountingRule[],
+): Array<[RuleCategory, AccountingRule[]]> {
+  const buckets = new Map<RuleCategory, AccountingRule[]>();
+  for (const rule of rules) {
+    const arr = buckets.get(rule.category) ?? [];
+    arr.push(rule);
+    buckets.set(rule.category, arr);
+  }
+  return CATEGORY_ORDER.filter((c) => buckets.has(c)).map(
+    (c) => [c, buckets.get(c)!] as [RuleCategory, AccountingRule[]],
   );
 }
 
