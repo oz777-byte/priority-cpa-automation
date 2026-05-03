@@ -27,6 +27,18 @@ export type {
   ARJERecord,
 } from './ar-types.js';
 
+// Cash / bank / credit-card scenarios — for transactions that aren't
+// tied to an invoice (fees, interest, transfers, bounced checks).
+export { constructCashBankJE } from './cash-bank-builders.js';
+export type {
+  CashBankScenario,
+  CashBankConfig,
+  CashBankInput,
+  CashBankJELine,
+  CashBankJERecord,
+  CashBankConstructResult,
+} from './cash-bank-types.js';
+
 /**
  * Build a balanced multi-record JE from a canonical invoice + company config.
  *

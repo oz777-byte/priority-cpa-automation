@@ -10,6 +10,7 @@ import {
   XCircle,
   CircleDashed,
   Sparkles,
+  Wand2,
 } from 'lucide-react';
 import { DataTable, type Column } from '@/components/data-table';
 import {
@@ -19,6 +20,7 @@ import {
   setTxnStatusAction,
   autoMatchAction,
 } from './actions';
+import { createJEFromBankTxnAction } from './cash-bank-actions';
 
 export type TxnStatus = 'unreconciled' | 'matched' | 'ignored';
 
@@ -144,6 +146,30 @@ export function BankPanel({
     });
   }
 
+  const [scenarioOpen, setScenarioOpen] = useState<BankTxnRow | null>(null);
+
+  function onCreateJE(txn: BankTxnRow, scenario: string, extras?: { destinationBankAccount?: string; customerAccount?: string; bouncedFee?: number }) {
+    setError(null);
+    setInfo(null);
+    const fd = new FormData();
+    fd.set('companyId', companyId);
+    fd.set('txnId', txn.id);
+    fd.set('scenario', scenario);
+    if (extras?.destinationBankAccount) fd.set('destinationBankAccount', extras.destinationBankAccount);
+    if (extras?.customerAccount) fd.set('customerAccount', extras.customerAccount);
+    if (extras?.bouncedFee !== undefined) fd.set('bouncedFee', String(extras.bouncedFee));
+    startTransition(async () => {
+      const r = await createJEFromBankTxnAction(fd);
+      if (!r.ok) {
+        setError(r.error ?? 'יצירת JE נכשלה');
+        return;
+      }
+      setScenarioOpen(null);
+      const warningSuffix = r.warnings && r.warnings.length > 0 ? ` (${r.warnings.length} אזהרות)` : '';
+      setInfo(`JE נוצר ותנועת הבנק סומנה כהותאמה${warningSuffix}`);
+    });
+  }
+
   const columns: Column<BankTxnRow>[] = [
     {
       key: 'txn_date',
@@ -238,6 +264,16 @@ export function BankPanel({
       align: 'left',
       cell: (r) => (
         <div className="flex items-center gap-1.5 justify-end">
+          {r.status === 'unreconciled' && (
+            <button
+              onClick={() => setScenarioOpen(r)}
+              disabled={pending}
+              className="p-1 text-ink-400 hover:text-accent-600"
+              title="צור JE לתנועה"
+            >
+              <Wand2 size={13} />
+            </button>
+          )}
           {r.status !== 'matched' && (
             <button
               onClick={() => onChangeStatus(r, 'matched')}
@@ -296,6 +332,14 @@ export function BankPanel({
 
       {csvOpen && <CsvImportForm pending={pending} onSubmit={onCsvImport} onCancel={() => setCsvOpen(false)} />}
       {manualOpen && <ManualAddForm pending={pending} onSubmit={onManualAdd} onCancel={() => setManualOpen(false)} />}
+      {scenarioOpen && (
+        <ScenarioPickerModal
+          txn={scenarioOpen}
+          pending={pending}
+          onSubmit={onCreateJE}
+          onCancel={() => setScenarioOpen(null)}
+        />
+      )}
 
       {/* KPI counters acting as filter chips */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -564,6 +608,167 @@ function Field({
           monospace ? 'font-mono' : ''
         }`}
       />
+    </div>
+  );
+}
+
+/* ─── Scenario picker modal ─────────────────────────────────────── */
+
+const SCENARIOS: Array<{
+  value: string;
+  label: string;
+  hint: string;
+  needsDestination?: boolean;
+  needsCustomer?: boolean;
+  needsFee?: boolean;
+}> = [
+  { value: 'BANK_FEE', label: 'עמלת בנק', hint: 'DR 522-0 / CR בנק' },
+  { value: 'INTEREST_INCOME', label: 'ריבית זכות', hint: 'DR בנק / CR 743-0' },
+  { value: 'INTEREST_EXPENSE', label: 'ריבית חובה (אוברדראפט)', hint: 'DR 624-0 / CR בנק' },
+  {
+    value: 'INTER_ACCOUNT_TRANSFER',
+    label: 'העברה בין חשבונות',
+    hint: 'DR בנק יעד / CR בנק מקור',
+    needsDestination: true,
+  },
+  { value: 'CASH_DEPOSIT', label: 'הפקדת מזומן לבנק', hint: 'DR בנק / CR קופה' },
+  { value: 'CASH_WITHDRAWAL', label: 'משיכת מזומן מהבנק', hint: 'DR קופה / CR בנק' },
+  {
+    value: 'BOUNCED_CHECK',
+    label: 'צ\'ק שחזר',
+    hint: 'DR לקוח + DR עמלה / CR בנק',
+    needsCustomer: true,
+    needsFee: true,
+  },
+  { value: 'CARD_CLEARING_FEE', label: 'עמלת סולק אשראי', hint: 'DR 522-1 / CR סולק' },
+];
+
+function ScenarioPickerModal({
+  txn,
+  pending,
+  onSubmit,
+  onCancel,
+}: {
+  txn: BankTxnRow;
+  pending: boolean;
+  onSubmit: (
+    txn: BankTxnRow,
+    scenario: string,
+    extras?: { destinationBankAccount?: string; customerAccount?: string; bouncedFee?: number },
+  ) => void;
+  onCancel: () => void;
+}) {
+  const [selected, setSelected] = useState<string>('BANK_FEE');
+  const [destination, setDestination] = useState('');
+  const [customer, setCustomer] = useState('');
+  const [fee, setFee] = useState('');
+
+  const scenario = SCENARIOS.find((s) => s.value === selected);
+
+  function submit() {
+    onSubmit(txn, selected, {
+      ...(scenario?.needsDestination && destination ? { destinationBankAccount: destination } : {}),
+      ...(scenario?.needsCustomer && customer ? { customerAccount: customer } : {}),
+      ...(scenario?.needsFee && fee ? { bouncedFee: Number(fee) } : {}),
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 bg-ink-900/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-5 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-ink-900">צור JE לתנועת בנק</h3>
+          <p className="text-xs text-ink-500 mt-0.5">
+            <span dir="ltr">{txn.txn_date}</span> · {txn.description} ·{' '}
+            <span className="font-medium text-ink-700 tabular-nums" dir="ltr">
+              {txn.amount_ils.toLocaleString('he-IL', { minimumFractionDigits: 2 })} ₪
+            </span>
+          </p>
+        </div>
+
+        <div className="space-y-2 max-h-72 overflow-y-auto">
+          {SCENARIOS.map((s) => (
+            <label
+              key={s.value}
+              className={`block border rounded-lg p-3 cursor-pointer transition ${
+                selected === s.value
+                  ? 'border-accent-500 bg-accent-500/5'
+                  : 'border-ink-200 hover:border-ink-300'
+              }`}
+            >
+              <input
+                type="radio"
+                name="scenario"
+                value={s.value}
+                checked={selected === s.value}
+                onChange={() => setSelected(s.value)}
+                className="hidden"
+              />
+              <div className="text-sm font-medium text-ink-900">{s.label}</div>
+              <div className="text-[11px] text-ink-500 mt-0.5">{s.hint}</div>
+            </label>
+          ))}
+        </div>
+
+        {scenario?.needsDestination && (
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-1">חשבון יעד</label>
+            <input
+              value={destination}
+              onChange={(e) => setDestination(e.target.value)}
+              placeholder="121-1"
+              dir="ltr"
+              className="w-full px-3 py-2 border border-ink-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-accent-500"
+            />
+          </div>
+        )}
+
+        {scenario?.needsCustomer && (
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-1">חשבון הלקוח</label>
+            <input
+              value={customer}
+              onChange={(e) => setCustomer(e.target.value)}
+              placeholder="120-1"
+              dir="ltr"
+              className="w-full px-3 py-2 border border-ink-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-accent-500"
+            />
+          </div>
+        )}
+
+        {scenario?.needsFee && (
+          <div>
+            <label className="block text-xs font-medium text-ink-700 mb-1">עמלת חזר (אופציונלי)</label>
+            <input
+              value={fee}
+              onChange={(e) => setFee(e.target.value)}
+              placeholder="30"
+              type="number"
+              step="0.01"
+              dir="ltr"
+              className="w-full px-3 py-2 border border-ink-200 rounded-lg text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-accent-500"
+            />
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 pt-2 border-t border-ink-100">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 text-ink-600 hover:bg-ink-50 rounded-lg text-sm"
+          >
+            ביטול
+          </button>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={pending}
+            className="px-5 py-2 bg-accent-600 text-white rounded-lg text-sm font-medium hover:bg-accent-500 disabled:opacity-50"
+          >
+            {pending ? 'יוצר...' : 'צור JE'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
