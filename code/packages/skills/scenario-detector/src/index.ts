@@ -15,7 +15,7 @@ export interface DetectorContext {
   hasMultipleExpenseCategories?: boolean;
   costCenter?: string | undefined;
   withholdingPercent?: number | undefined;
-  mixedDeductionCategory?: 'vehicle' | 'meals' | 'non_deductible' | undefined;
+  mixedDeductionCategory?: NonNullable<CanonicalInvoice['invoice']['mixed_deduction_category']> | undefined;
 }
 
 export interface DetectionResult {
@@ -187,7 +187,7 @@ export function detectScenario(
 
 interface Signals {
   withholding: number | undefined;
-  mixedCategory: 'vehicle' | 'meals' | 'non_deductible' | undefined;
+  mixedCategory: NonNullable<CanonicalInvoice['invoice']['mixed_deduction_category']> | undefined;
   costCenter: string | undefined;
   hasDifferentDates: boolean;
   hasDiscount: boolean;

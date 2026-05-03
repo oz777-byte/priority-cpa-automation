@@ -18,7 +18,7 @@ export {
 
 export { getAllocationThreshold, isAllocationRequired } from './allocation.js';
 
-export { applyMixedDeduction, DEDUCTION_RATES } from './deduction.js';
+export { applyMixedDeduction, DEDUCTION_RATES, DEDUCTION_LABELS } from './deduction.js';
 export type { DeductionCategory, MixedDeductionResult } from './deduction.js';
 
 export {

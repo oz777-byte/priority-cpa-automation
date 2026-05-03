@@ -91,7 +91,22 @@ export const InvoiceHeaderSchema = z
     /** Withholding-tax percent (0-100). Triggers WITH_WITHHOLDING scenario. */
     withholding_percent: z.number().min(0).max(100).optional(),
     /** Mixed-deduction category (Israeli law). Triggers MIXED_DEDUCTION scenario. */
-    mixed_deduction_category: z.enum(['vehicle', 'meals', 'non_deductible']).optional(),
+    mixed_deduction_category: z
+      .enum([
+        'vehicle',
+        'meals',
+        'non_deductible',
+        'commercial_vehicle',
+        'motorcycle_small',
+        'motorcycle_large',
+        'mobile_phone_full_business',
+        'mobile_phone_partial',
+        'mobile_phone_personal_majority',
+        'gifts_above_threshold',
+        'late_meals',
+        'foreign_trip',
+      ])
+      .optional(),
     /** Cost center / project tag. Triggers WITH_COST_CENTER scenario. */
     cost_center: z.string().optional(),
     /** FX rate for non-ILS currencies (units of ILS per unit of foreign currency). */

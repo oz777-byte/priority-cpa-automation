@@ -447,22 +447,34 @@ function buildWithholding(
  *
  * Both records share the same reference1 so Priority links them.
  */
+type MixedDeductionCategory = NonNullable<CanonicalInvoice['invoice']['mixed_deduction_category']>;
+
+const MIXED_DEDUCTION_RATES: Record<MixedDeductionCategory, number> = {
+  vehicle: 2 / 3,
+  meals: 0.25,
+  non_deductible: 0,
+  commercial_vehicle: 1.0,
+  motorcycle_small: 1.0,
+  motorcycle_large: 2 / 3,
+  mobile_phone_full_business: 1.0,
+  mobile_phone_partial: 2 / 3,
+  mobile_phone_personal_majority: 1 / 3,
+  gifts_above_threshold: 0,
+  late_meals: 1.0,
+  foreign_trip: 0,
+};
+
 function buildMixedDeduction(
   invoice: CanonicalInvoice,
   config: ConstructorConfig,
-  category: 'vehicle' | 'meals' | 'non_deductible',
+  category: MixedDeductionCategory,
   warnings: string[],
 ): JERecord[] {
   const subtotal = invoice.totals.subtotal;
   const total = invoice.totals.total;
   const vat = vatFromTotals(invoice);
 
-  const RATES: Record<typeof category, number> = {
-    vehicle: 2 / 3,
-    meals: 0.25,
-    non_deductible: 0,
-  };
-  const rate = RATES[category];
+  const rate = MIXED_DEDUCTION_RATES[category];
 
   const expenseDeductible = roundCents(subtotal * rate);
   const expenseNonDeductible = roundCents(subtotal - expenseDeductible);

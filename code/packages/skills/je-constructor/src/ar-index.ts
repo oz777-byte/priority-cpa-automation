@@ -610,10 +610,21 @@ function buildAdvance(
 }
 
 /**
- * AR_BAD_DEBT — write off uncollectible customer balance
- *   DR  bad_debt_expense     total
- *   CR  customer             total
- * The original revenue stays — only the receivable is written off.
+ * AR_BAD_DEBT — write off uncollectible customer balance + recover VAT.
+ *
+ * Per סעיף 39א לחוק מע"מ: when a customer debt becomes bad, the dealer can
+ * claim back the output VAT they previously paid. The JE reverses both the
+ * receivable AND the output VAT liability:
+ *
+ *   DR  bad_debt_expense     subtotal      (the actual economic loss)
+ *   DR  output_vat           vat           (claim back from authority via 874)
+ *   CR  customer             total         (clear the full receivable)
+ *
+ * The DR to output VAT reduces the company's VAT-payable liability in the
+ * current PCN874 — effectively a VAT refund. Eligibility window is up to
+ * 3 years from the original invoice date (per regulation).
+ *
+ * If invoice is exempt/zero-rate (no VAT), falls back to single-VAT-line write-off.
  */
 function buildBadDebt(
   invoice: SalesInvoice,
@@ -625,11 +636,25 @@ function buildBadDebt(
   }
   const badDebt = config.badDebtAccount ?? '530-0';
   const total = invoice.totals.total;
+  const subtotal = invoice.totals.subtotal;
+  const vat = vatFromTotals(invoice);
 
-  const lines: ARJELine[] = [
-    { account: badDebt, debit: total, credit: 0 },
-    { account: invoice.customer.internal_code_priority, debit: 0, credit: total },
-  ];
+  const lines: ARJELine[] = [];
+
+  if (vat > 0) {
+    // Standard taxable invoice — recover output VAT (סעיף 39א).
+    lines.push(
+      { account: badDebt, debit: subtotal, credit: 0 },
+      { account: config.outputVatAccount, debit: vat, credit: 0 },
+      { account: invoice.customer.internal_code_priority, debit: 0, credit: total },
+    );
+  } else {
+    // Exempt or zero-rate invoice — no VAT to recover, just the receivable.
+    lines.push(
+      { account: badDebt, debit: total, credit: 0 },
+      { account: invoice.customer.internal_code_priority, debit: 0, credit: total },
+    );
+  }
 
   return {
     ...baseHeader(invoice, config, 'AR_BAD_DEBT'),
@@ -638,7 +663,12 @@ function buildBadDebt(
     lines,
     notes: [
       `חוב אבוד מ-${invoice.customer.name}: ${total.toFixed(2)} ₪`,
-      'יש לבקש החזר מע"מ עסקאות בטופס 1294 ברשות המסים',
+      ...(vat > 0
+        ? [
+            `החזר מע"מ עסקאות (סעיף 39א): ${vat.toFixed(2)} ₪ — יקוזז ב-PCN874 הקרוב`,
+            'תנאי לזכאות: עד 3 שנים מהחשבונית, חוב נדרש בפועל ולא נגבה',
+          ]
+        : ['חשבונית פטורה — אין מע"מ להשבה']),
     ],
   };
 }

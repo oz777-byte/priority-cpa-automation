@@ -212,16 +212,43 @@ describe('constructARJE — AR_WITH_WITHHOLDING', () => {
   });
 });
 
-describe('constructARJE — AR_BAD_DEBT', () => {
-  it('writes off customer balance to bad-debt expense', () => {
+describe('constructARJE — AR_BAD_DEBT (with VAT recovery, סעיף 39א)', () => {
+  it('writes off customer balance + recovers output VAT for taxable invoice', () => {
     const r = constructARJE(
       sale({ bad_debt_original_invoice: 'INV-980' }),
       config,
     );
     expect(r.primaryScenario).toBe('AR_BAD_DEBT');
     const lines = r.records[0]!.lines;
-    expect(lines.find((l) => l.account === '530-0')?.debit).toBe(1180);
-    expect(lines.find((l) => l.account === '120-1')?.credit).toBe(1180);
+    // Subtotal 1000, VAT 180, total 1180
+    expect(lines.find((l) => l.account === '530-0')?.debit).toBe(1000); // subtotal only
+    expect(lines.find((l) => l.account === '220-0')?.debit).toBe(180); // output VAT recovery
+    expect(lines.find((l) => l.account === '120-1')?.credit).toBe(1180); // full receivable
+    // JE balanced
+    const dr = lines.reduce((s, l) => s + l.debit, 0);
+    const cr = lines.reduce((s, l) => s + l.credit, 0);
+    expect(Math.abs(dr - cr)).toBeLessThan(0.05);
+  });
+
+  it('falls back to single-write-off when invoice has no VAT (totals match)', () => {
+    const r = constructARJE(
+      sale({ bad_debt_original_invoice: 'INV-EXEMPT' }, { subtotal: 500, total: 500 }),
+      config,
+    );
+    expect(r.primaryScenario).toBe('AR_BAD_DEBT');
+    const lines = r.records[0]!.lines;
+    expect(lines.find((l) => l.account === '220-0')).toBeUndefined();
+    expect(lines.find((l) => l.account === '530-0')?.debit).toBe(500);
+    expect(lines.find((l) => l.account === '120-1')?.credit).toBe(500);
+  });
+
+  it('exposes VAT recovery in notes', () => {
+    const r = constructARJE(
+      sale({ bad_debt_original_invoice: 'INV-1' }),
+      config,
+    );
+    const notes = r.records[0]!.notes.join(' ');
+    expect(notes).toMatch(/39א|מע"מ עסקאות/);
   });
 });
 

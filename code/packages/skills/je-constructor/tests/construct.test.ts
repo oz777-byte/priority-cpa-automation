@@ -260,6 +260,96 @@ describe('constructJE — MIXED_DEDUCTION', () => {
     );
     expect(r.records[0]!.reference1).toBe(r.records[1]!.reference1);
   });
+
+  it('commercial_vehicle N1 (100%): single record, full VAT recovery', () => {
+    const r = constructJE(
+      inv({}, { subtotal: 1000, total: 1180 }),
+      { ...config, nonDeductibleAccount: '502-1' },
+      { mixedDeductionCategory: 'commercial_vehicle' },
+    );
+    expect(r.records).toHaveLength(1);
+    const rec = r.records[0]!;
+    expect(rec.lines.find((l) => l.account === '502-0')?.debit).toBe(1000);
+    expect(rec.lines.find((l) => l.account === '205-2')?.debit).toBe(180);
+    expect(rec.lines.find((l) => l.account === '200087')?.credit).toBe(1180);
+    expect(balanced(rec)).toBe(true);
+  });
+
+  it('motorcycle_small ≤125cc (100%): single record', () => {
+    const r = constructJE(
+      inv({}, { subtotal: 500, total: 590 }),
+      { ...config, nonDeductibleAccount: '502-1' },
+      { mixedDeductionCategory: 'motorcycle_small' },
+    );
+    expect(r.records).toHaveLength(1);
+    expect(r.records[0]!.lines.find((l) => l.account === '205-2')?.debit).toBe(90);
+  });
+
+  it('motorcycle_large >125cc (2/3): 2 records like passenger car', () => {
+    const r = constructJE(
+      inv({}, { subtotal: 1000, total: 1180 }),
+      { ...config, nonDeductibleAccount: '502-1' },
+      { mixedDeductionCategory: 'motorcycle_large' },
+    );
+    expect(r.records).toHaveLength(2);
+    expect(r.records[0]!.lines.find((l) => l.account === '205-2')?.debit).toBe(120);
+  });
+
+  it('mobile_phone_partial (2/3): 2 records', () => {
+    const r = constructJE(
+      inv({}, { subtotal: 300, total: 354 }),
+      { ...config, nonDeductibleAccount: '502-1' },
+      { mixedDeductionCategory: 'mobile_phone_partial' },
+    );
+    expect(r.records).toHaveLength(2);
+    const ded = r.records[0]!;
+    expect(ded.lines.find((l) => l.account === '502-0')?.debit).toBe(200);
+    expect(ded.lines.find((l) => l.account === '205-2')?.debit).toBe(36);
+  });
+
+  it('mobile_phone_personal_majority (1/3): 2 records, smaller deductible side', () => {
+    const r = constructJE(
+      inv({}, { subtotal: 300, total: 354 }),
+      { ...config, nonDeductibleAccount: '502-1' },
+      { mixedDeductionCategory: 'mobile_phone_personal_majority' },
+    );
+    const ded = r.records[0]!;
+    expect(ded.lines.find((l) => l.account === '502-0')?.debit).toBe(100);
+    expect(ded.lines.find((l) => l.account === '205-2')?.debit).toBe(18);
+  });
+
+  it('gifts_above_threshold (0%): single record, all non-deductible', () => {
+    const r = constructJE(
+      inv({}, { subtotal: 500, total: 590 }),
+      { ...config, nonDeductibleAccount: '502-1' },
+      { mixedDeductionCategory: 'gifts_above_threshold' },
+    );
+    expect(r.records).toHaveLength(1);
+    const rec = r.records[0]!;
+    // All goes to non-deductible account
+    expect(rec.lines.find((l) => l.account === '502-1')?.debit).toBe(590);
+    expect(rec.lines.find((l) => l.account === '205-2')).toBeUndefined();
+  });
+
+  it('late_meals (100%): single record, full VAT recovery', () => {
+    const r = constructJE(
+      inv({}, { subtotal: 200, total: 236 }),
+      { ...config, nonDeductibleAccount: '502-1' },
+      { mixedDeductionCategory: 'late_meals' },
+    );
+    expect(r.records).toHaveLength(1);
+    expect(r.records[0]!.lines.find((l) => l.account === '205-2')?.debit).toBe(36);
+  });
+
+  it('foreign_trip (0%): no VAT recovery', () => {
+    const r = constructJE(
+      inv({}, { subtotal: 1000, total: 1000 }),
+      { ...config, nonDeductibleAccount: '502-1' },
+      { mixedDeductionCategory: 'foreign_trip' },
+    );
+    expect(r.records).toHaveLength(1);
+    expect(r.records[0]!.lines.find((l) => l.account === '205-2')).toBeUndefined();
+  });
 });
 
 describe('constructJE — SELF_INVOICE (חשבונית עצמית)', () => {
