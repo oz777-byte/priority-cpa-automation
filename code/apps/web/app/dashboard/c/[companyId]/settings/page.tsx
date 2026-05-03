@@ -192,6 +192,35 @@ export default async function CompanySettingsPage({
           </div>
         </FormSection>
 
+        <FormSection
+          icon={Percent}
+          title="הגדרות מע&quot;מ ודיווח"
+          description="קובע איך החברה מדווחת PCN874 ומחשבת תקופות."
+        >
+          <div className="grid grid-cols-2 gap-3">
+            <SelectField
+              name="vat_basis"
+              label="בסיס דיווח מע&quot;מ"
+              defaultValue={(company as { vat_basis?: string }).vat_basis ?? 'accrual'}
+              options={[
+                { value: 'accrual', label: 'בסיס דיווח (לפי תאריך חשבונית)' },
+                { value: 'cash', label: 'בסיס מזומן (לפי תאריך תשלום)' },
+              ]}
+              hint='בסיס מזומן זמין רק לעסקים מתחת לסף ~1.95M שנתי'
+            />
+            <SelectField
+              name="vat_filing_frequency"
+              label="תדירות דיווח"
+              defaultValue={(company as { vat_filing_frequency?: string }).vat_filing_frequency ?? 'bimonthly'}
+              options={[
+                { value: 'monthly', label: 'חודשי' },
+                { value: 'bimonthly', label: 'דו-חודשי (ברירת מחדל)' },
+                { value: 'annual', label: 'שנתי (חברות קטנות מאוד)' },
+              ]}
+            />
+          </div>
+        </FormSection>
+
         <div className="flex justify-end gap-3 pt-2">
           <button
             type="submit"
@@ -300,11 +329,13 @@ function SelectField({
   label,
   defaultValue,
   options,
+  hint,
 }: {
   name: string;
   label: string;
   defaultValue?: string;
-  options: string[];
+  options: Array<string | { value: string; label: string }>;
+  hint?: string;
 }) {
   return (
     <div>
@@ -314,12 +345,17 @@ function SelectField({
         defaultValue={defaultValue}
         className="w-full px-3 py-2 border border-ink-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 bg-white"
       >
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
+        {options.map((o) => {
+          const value = typeof o === 'string' ? o : o.value;
+          const labelText = typeof o === 'string' ? o : o.label;
+          return (
+            <option key={value} value={value}>
+              {labelText}
+            </option>
+          );
+        })}
       </select>
+      {hint && <div className="text-[11px] text-ink-400 mt-1">{hint}</div>}
     </div>
   );
 }

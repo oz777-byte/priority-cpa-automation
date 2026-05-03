@@ -11,6 +11,7 @@ interface DBSupplier {
   name: string;
   internal_code: string;
   tax_id: string | null;
+  dealer_status: 'registered' | 'exempt' | 'foreign';
   default_expense_account: string | null;
   default_cost_center: string | null;
   payment_terms: string | null;
@@ -28,7 +29,7 @@ export default async function SuppliersPage({
   const { data: suppliers } = await admin
     .from('suppliers')
     .select(
-      'id, name, internal_code, tax_id, default_expense_account, default_cost_center, payment_terms',
+      'id, name, internal_code, tax_id, dealer_status, default_expense_account, default_cost_center, payment_terms',
     )
     .eq('company_id', company.id)
     .order('name', { ascending: true });
@@ -58,6 +59,7 @@ export default async function SuppliersPage({
     name: s.name,
     internal_code: s.internal_code,
     tax_id: s.tax_id,
+    dealer_status: s.dealer_status,
     default_expense_account: s.default_expense_account,
     default_cost_center: s.default_cost_center,
     payment_terms: s.payment_terms,

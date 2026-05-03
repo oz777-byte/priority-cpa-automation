@@ -16,7 +16,7 @@ export async function loadCompanyForUser(
   const admin = getAdminClient();
   const { data, error } = await admin
     .from('companies')
-    .select('id, firm_id, name, tax_id, priority_version, status, settings, inbox_token, created_at')
+    .select('id, firm_id, name, tax_id, priority_version, status, settings, inbox_token, vat_basis, vat_filing_frequency, created_at')
     .eq('id', companyId)
     .eq('firm_id', firmId)
     .maybeSingle();

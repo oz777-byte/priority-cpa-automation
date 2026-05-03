@@ -11,6 +11,7 @@ import {
   checkDuplicate,
   checkOcrConfidence,
   checkCurrency,
+  checkRequiredTaxInvoiceFields,
 } from './checks.js';
 import { invoiceFingerprint } from './fingerprint.js';
 import type {
@@ -29,6 +30,7 @@ export function validateInvoice(
   const warnings: ValidationWarning[] = [];
   const tolerance = context.roundingTolerance ?? DEFAULT_ROUNDING_TOLERANCE;
 
+  checkRequiredTaxInvoiceFields(parsed, errors, warnings);
   checkTotalsConsistent(parsed, errors, warnings, tolerance);
   checkVatRateMatchesDate(parsed, errors);
   checkVatAmountMatchesRate(parsed, errors, tolerance);

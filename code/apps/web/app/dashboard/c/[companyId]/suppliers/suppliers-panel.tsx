@@ -10,6 +10,7 @@ export interface SupplierRow {
   name: string;
   internal_code: string;
   tax_id: string | null;
+  dealer_status: 'registered' | 'exempt' | 'foreign';
   default_expense_account: string | null;
   default_cost_center: string | null;
   payment_terms: string | null;
@@ -251,6 +252,23 @@ function SupplierForm({
           dir="ltr"
           hint='משמש לזיהוי אוטומטי של החשבונית במאסטר'
         />
+        <label className="block">
+          <span className="text-xs font-medium text-ink-700 mb-1 block">
+            סוג עוסק
+          </span>
+          <select
+            name="dealer_status"
+            defaultValue={(initial as { dealer_status?: string } | undefined)?.dealer_status ?? 'registered'}
+            className="w-full px-3 py-2 border border-ink-200 rounded-lg text-sm bg-white"
+          >
+            <option value="registered">עוסק רשום (כולל מע"מ)</option>
+            <option value="exempt">עוסק פטור (ללא מע"מ)</option>
+            <option value="foreign">ספק זר (חשבונית עצמית)</option>
+          </select>
+          <span className="block text-[11px] text-ink-500 mt-1">
+            עוסק פטור: לא ייכלל בתשומות 874, JE ייווצר ללא שורת מע"מ
+          </span>
+        </label>
         <Field
           name="default_expense_account"
           label="חשבון הוצאה ברירת מחדל"

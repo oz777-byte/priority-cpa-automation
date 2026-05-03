@@ -27,6 +27,7 @@ const SupplierInput = z.object({
     .min(1, 'קוד ספק נדרש')
     .max(15),
   tax_id: optString(15),
+  dealer_status: z.enum(['registered', 'exempt', 'foreign']).default('registered'),
   default_expense_account: optAccount,
   default_cost_center: optString(15),
   payment_terms: optString(40),
@@ -50,6 +51,7 @@ export async function upsertSupplierAction(
     name: formData.get('name'),
     internal_code: formData.get('internal_code'),
     tax_id: formData.get('tax_id') ?? undefined,
+    dealer_status: formData.get('dealer_status') ?? 'registered',
     default_expense_account: formData.get('default_expense_account') ?? undefined,
     default_cost_center: formData.get('default_cost_center') ?? undefined,
     payment_terms: formData.get('payment_terms') ?? undefined,

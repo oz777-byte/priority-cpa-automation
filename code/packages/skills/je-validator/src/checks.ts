@@ -1,6 +1,6 @@
 import type { CanonicalInvoice } from '@priority-cpa/invoice-schema';
 import {
-  getStandardVatRate,
+  getVatRateForDate,
   isAllocationRequired,
   reconcileRounding,
   RoundingMismatchError,
@@ -67,7 +67,7 @@ export function checkVatRateMatchesDate(
 ): void {
   const declared = invoice.totals.vat_rate;
   if (declared === undefined) return;
-  const expected = getStandardVatRate(invoice.invoice.date);
+  const expected = getVatRateForDate(invoice.invoice.date);
   if (Math.abs(declared - expected) >= 0.5) {
     pushError(errors, {
       code: 'VAT_RATE_MISMATCH',
@@ -103,7 +103,7 @@ export function checkVatAmountMatchesRate(
     // Zero-VAT invoices are allowed (Eilat, exports) but should be flagged.
     return;
   }
-  const expectedRate = getStandardVatRate(invoice.invoice.date);
+  const expectedRate = getVatRateForDate(invoice.invoice.date);
   const expectedVat = (subtotal * expectedRate) / 100;
   // Tolerance scales with the amount (0.5% of the VAT, but at least 0.05).
   const allowedDelta = Math.max(tolerance, expectedVat * 0.005);
@@ -294,6 +294,86 @@ export function checkCurrency(
       message: `invoice in ${invoice.invoice.currency} — FX engine required`,
       messageHe: `חשבונית במטבע ${invoice.invoice.currency} — נדרש טיפול במט"ח`,
       field: 'invoice.currency',
+    });
+  }
+}
+
+/**
+ * Israeli law mandates these fields on a חשבונית מס:
+ *  - Supplier name
+ *  - Supplier ע.מ (9 digits) — required for registered dealers
+ *  - Invoice number
+ *  - Invoice date
+ *  - Subtotal + VAT separated (or total if exempt)
+ *  - Allocation number for invoices ≥ threshold (handled by checkAllocation)
+ * Missing fields = invalid invoice = no VAT recovery.
+ */
+export function checkRequiredTaxInvoiceFields(
+  invoice: CanonicalInvoice,
+  errors: ValidationError[],
+  warnings: ValidationWarning[],
+): void {
+  const supplier = invoice.supplier;
+  if (!supplier?.name?.trim()) {
+    errors.push({
+      code: 'MISSING_SUPPLIER_NAME',
+      message: 'supplier name missing',
+      messageHe: 'שם הספק חסר — שדה חובה בחשבונית מס',
+      field: 'supplier.name',
+    });
+  }
+
+  // Tax ID format: Israeli ע.מ is 9 digits. Allow 8 (some legacy) or 9.
+  const taxIdRaw = (supplier?.tax_id ?? '').replace(/\D/g, '');
+  if (!taxIdRaw) {
+    warnings.push({
+      code: 'MISSING_SUPPLIER_TAX_ID',
+      message: 'supplier tax id missing',
+      messageHe: 'ע.מ של הספק חסר — חובה בחשבונית מס. אם זה עוסק פטור — יש לסמן כך במאסטר.',
+      field: 'supplier.tax_id',
+    });
+  } else if (taxIdRaw.length < 8 || taxIdRaw.length > 9) {
+    warnings.push({
+      code: 'INVALID_SUPPLIER_TAX_ID',
+      message: `supplier tax id length ${taxIdRaw.length} invalid (expected 8-9 digits)`,
+      messageHe: `ע.מ הספק (${taxIdRaw}) באורך לא תקני — מצופה 8-9 ספרות.`,
+      field: 'supplier.tax_id',
+    });
+  }
+
+  if (!invoice.invoice.number?.trim()) {
+    errors.push({
+      code: 'MISSING_INVOICE_NUMBER',
+      message: 'invoice number missing',
+      messageHe: 'מספר חשבונית חסר — שדה חובה.',
+      field: 'invoice.number',
+    });
+  }
+
+  if (!invoice.invoice.date) {
+    errors.push({
+      code: 'MISSING_INVOICE_DATE',
+      message: 'invoice date missing',
+      messageHe: 'תאריך החשבונית חסר — שדה חובה.',
+      field: 'invoice.date',
+    });
+  }
+
+  if (!Number.isFinite(invoice.totals?.subtotal) || invoice.totals.subtotal < 0) {
+    errors.push({
+      code: 'MISSING_SUBTOTAL',
+      message: 'invoice subtotal missing or invalid',
+      messageHe: 'סכום ביניים חסר או שלילי — שדה חובה.',
+      field: 'totals.subtotal',
+    });
+  }
+
+  if (!Number.isFinite(invoice.totals?.total) || invoice.totals.total < 0) {
+    errors.push({
+      code: 'MISSING_TOTAL',
+      message: 'invoice total missing or invalid',
+      messageHe: 'סכום כולל חסר או שלילי — שדה חובה.',
+      field: 'totals.total',
     });
   }
 }

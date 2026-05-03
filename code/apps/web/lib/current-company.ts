@@ -20,6 +20,8 @@ export interface CompanyRow {
   status: 'active' | 'paused' | 'archived';
   settings: Record<string, unknown>;
   inbox_token: string | null;
+  vat_basis?: 'accrual' | 'cash';
+  vat_filing_frequency?: 'monthly' | 'bimonthly' | 'annual';
   created_at: string;
 }
 

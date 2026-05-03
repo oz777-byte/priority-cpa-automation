@@ -30,6 +30,9 @@ const Input = z.object({
   payment_account_bank: optAccount,
   withholding_account: optAccount,
   non_deductible_account: optAccount,
+  // Top-level VAT meta on companies table (not in settings jsonb).
+  vat_basis: z.enum(['accrual', 'cash']).optional(),
+  vat_filing_frequency: z.enum(['monthly', 'bimonthly', 'annual']).optional(),
 });
 
 export interface UpdateSettingsResult {
@@ -56,6 +59,8 @@ export async function updateCompanySettingsAction(
     payment_account_bank: formData.get('payment_account_bank') ?? undefined,
     withholding_account: formData.get('withholding_account') ?? undefined,
     non_deductible_account: formData.get('non_deductible_account') ?? undefined,
+    vat_basis: formData.get('vat_basis') ?? undefined,
+    vat_filing_frequency: formData.get('vat_filing_frequency') ?? undefined,
   });
   if (!parsed.success) {
     return {
@@ -63,7 +68,7 @@ export async function updateCompanySettingsAction(
       error: parsed.error.errors[0]?.message ?? 'נתונים לא תקינים',
     };
   }
-  const { companyId, ...incoming } = parsed.data;
+  const { companyId, vat_basis, vat_filing_frequency, ...incoming } = parsed.data;
   const company = await loadCompanyForUser(me.id, me.email, companyId);
 
   // Merge with existing — only overwrite fields actually present in the form.
@@ -77,9 +82,14 @@ export async function updateCompanySettingsAction(
     }
   }
 
+  // Build top-level update payload (vat_basis + vat_filing_frequency are columns, not jsonb).
+  const updatePayload: Record<string, unknown> = { settings: merged };
+  if (vat_basis) updatePayload.vat_basis = vat_basis;
+  if (vat_filing_frequency) updatePayload.vat_filing_frequency = vat_filing_frequency;
+
   const { error } = await admin
     .from('companies')
-    .update({ settings: merged })
+    .update(updatePayload)
     .eq('id', company.id);
   if (error) {
     return { ok: false, error: error.message };

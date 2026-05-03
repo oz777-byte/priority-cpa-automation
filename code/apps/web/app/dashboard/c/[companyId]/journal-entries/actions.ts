@@ -8,6 +8,7 @@ import {
   type SalesInvoice,
 } from '@priority-cpa/invoice-schema';
 import { constructJE, constructARJE } from '@priority-cpa/je-constructor';
+import { isWithinSixMonthRule } from '@priority-cpa/israeli-vat-logic';
 import { getAdminClient } from '@/lib/supabase/admin';
 import {
   type CompanySettings,
@@ -41,7 +42,7 @@ export async function ensureDraftJEsForCompany(
   // company-level defaults (matched by tax_id, then by internal_code).
   const { data: supplierRows } = await admin
     .from('suppliers')
-    .select('id, internal_code, tax_id, default_expense_account, default_cost_center')
+    .select('id, internal_code, tax_id, default_expense_account, default_cost_center, dealer_status')
     .eq('company_id', companyId);
   const supplierByTaxId = new Map<
     string,
@@ -49,6 +50,7 @@ export async function ensureDraftJEsForCompany(
       id: string;
       default_expense_account: string | null;
       default_cost_center: string | null;
+      dealer_status: string;
     }
   >();
   const supplierByCode = new Map<
@@ -57,6 +59,7 @@ export async function ensureDraftJEsForCompany(
       id: string;
       default_expense_account: string | null;
       default_cost_center: string | null;
+      dealer_status: string;
     }
   >();
   for (const s of supplierRows ?? []) {
@@ -64,6 +67,7 @@ export async function ensureDraftJEsForCompany(
       id: s.id as string,
       default_expense_account: (s.default_expense_account as string | null) ?? null,
       default_cost_center: (s.default_cost_center as string | null) ?? null,
+      dealer_status: ((s as { dealer_status?: string }).dealer_status as string | undefined) ?? 'registered',
     };
     if (s.tax_id) supplierByTaxId.set(s.tax_id as string, v);
     if (s.internal_code) supplierByCode.set(s.internal_code as string, v);
@@ -164,7 +168,40 @@ export async function ensureDraftJEsForCompany(
       }
     }
 
+    // ── VAT compliance pre-checks ──────────────────────────────────────
+    // 6-month rule (סעיף 38א): if invoice is older than 180 days, VAT input
+    // cannot be claimed. Build the JE without the VAT line.
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const isExemptSupplier = supplierMatch?.dealer_status === 'exempt';
+    const sixMonthOk = isWithinSixMonthRule(canonical.invoice.date, todayIso);
+    const vatBlockedReason = isExemptSupplier
+      ? 'exempt-supplier'
+      : !sixMonthOk
+        ? 'six-month-rule'
+        : null;
+
+    if (vatBlockedReason) {
+      // Force the constructor to treat this as no-VAT by setting subtotal=total.
+      // The constructor will compute vat = total - subtotal = 0 → no VAT line.
+      canonical.totals = {
+        ...canonical.totals,
+        total: canonical.totals.subtotal,
+      };
+    }
+
     const result = constructJE(canonical, config);
+
+    if (vatBlockedReason === 'exempt-supplier') {
+      result.warnings.push(
+        `ספק "${canonical.supplier.name}" מסומן כעוסק פטור — JE נבנה ללא שורת מע"מ. ` +
+          `החשבונית לא תיכלל בתשומות 874.`,
+      );
+    } else if (vatBlockedReason === 'six-month-rule') {
+      result.warnings.push(
+        `חשבונית מתאריך ${canonical.invoice.date} (יותר מ-180 יום) — חוק 6 חודשים: ` +
+          `אין קיזוז מע"מ תשומות. JE נבנה ללא שורת מע"מ.`,
+      );
+    }
 
     // For now: each detected JERecord is stored as a separate journal_entries
     // row in the DB. (Multi-record scenarios will produce > 1 row.)
@@ -182,6 +219,11 @@ export async function ensureDraftJEsForCompany(
           ...(record.reference2 ? { reference2: record.reference2 } : {}),
           document_date: record.documentDate,
           value_date: record.valueDate,
+          // vat_reporting_date = today (when this JE is being recorded).
+          // For invoices entered on time this == document_date.
+          // For late invoices this is the recording date — fixes the
+          // late-invoice 874 reporting bug.
+          vat_reporting_date: todayIso,
           currency: record.currency,
           ...(canonical.invoice.fx_rate
             ? { fx_rate: canonical.invoice.fx_rate }
@@ -194,6 +236,7 @@ export async function ensureDraftJEsForCompany(
                   constructor_warnings: result.warnings,
                   overlays: result.overlays,
                   notes: record.notes,
+                  vat_blocked_reason: vatBlockedReason,
                 },
               }
             : {}),
@@ -259,6 +302,7 @@ export async function ensureDraftJEsForCompany(
     const sales: SalesInvoice = parsed.data;
 
     const result = constructARJE(sales, arConfig);
+    const todayIsoAr = new Date().toISOString().slice(0, 10);
 
     for (const record of result.records) {
       const { data: jeRow, error: jeErr } = await admin
@@ -274,6 +318,8 @@ export async function ensureDraftJEsForCompany(
           ...(record.reference2 ? { reference2: record.reference2 } : {}),
           document_date: record.documentDate,
           value_date: record.valueDate,
+          // Sales invoices: vat_reporting_date = today (when JE recorded).
+          vat_reporting_date: todayIsoAr,
           currency: record.currency,
           ...(sales.invoice.fx_rate ? { fx_rate: sales.invoice.fx_rate } : {}),
           details: record.details,

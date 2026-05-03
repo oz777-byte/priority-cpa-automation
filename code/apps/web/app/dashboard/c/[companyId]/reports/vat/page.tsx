@@ -47,39 +47,64 @@ export default async function VatReportPage({
   const range: DateRange = resolveRange(searchParams, presets);
 
   const admin = getAdminClient();
-  const { data: rawInvoices } = await admin
-    .from('invoices_inbox')
-    .select('id, status, canonical')
+
+  // Find JEs in this VAT-reporting period (filtered by vat_reporting_date,
+  // NOT by invoice date — fixes the late-arriving-invoice case per Israeli
+  // VAT law: an invoice is reported in the period it was *recorded*, not the
+  // period it was *issued*).
+  const { data: jeRows } = await admin
+    .from('journal_entries')
+    .select('invoice_id, vat_reporting_date')
     .eq('company_id', company.id)
+    .gte('vat_reporting_date', range.from)
+    .lte('vat_reporting_date', range.to)
+    .neq('status', 'cancelled')
     .neq('status', 'error');
 
-  const allInvoices: InvoiceForReport[] = (
-    (rawInvoices ?? []) as Array<{ id: string; status: string; canonical: unknown }>
-  )
-    .map((row): InvoiceForReport | null => {
-      const parsed = CanonicalInvoiceSchema.safeParse(row.canonical);
-      if (!parsed.success) return null;
-      const c = parsed.data;
-      const subtotal = c.totals.subtotal;
-      const total = c.totals.total;
-      const vat = Math.round((total - subtotal) * 100) / 100;
-      return {
-        id: row.id,
-        status: row.status,
-        supplierName: c.supplier.name,
-        supplierTaxId: c.supplier.tax_id,
-        invoiceNumber: c.invoice.number,
-        date: c.invoice.date,
-        currency: c.invoice.currency,
-        subtotal,
-        vat,
-        total,
-      };
-    })
-    .filter((r): r is InvoiceForReport => r !== null);
+  const invoiceToReportingDate = new Map<string, string>();
+  for (const je of (jeRows ?? []) as Array<{ invoice_id: string | null; vat_reporting_date: string }>) {
+    if (je.invoice_id && !invoiceToReportingDate.has(je.invoice_id)) {
+      invoiceToReportingDate.set(je.invoice_id, je.vat_reporting_date);
+    }
+  }
+
+  let allInvoices: InvoiceForReport[] = [];
+  if (invoiceToReportingDate.size > 0) {
+    const { data: rawInvoices } = await admin
+      .from('invoices_inbox')
+      .select('id, status, canonical')
+      .eq('company_id', company.id)
+      .in('id', Array.from(invoiceToReportingDate.keys()));
+
+    allInvoices = (
+      (rawInvoices ?? []) as Array<{ id: string; status: string; canonical: unknown }>
+    )
+      .map((row): InvoiceForReport | null => {
+        const parsed = CanonicalInvoiceSchema.safeParse(row.canonical);
+        if (!parsed.success) return null;
+        const c = parsed.data;
+        const subtotal = c.totals.subtotal;
+        const total = c.totals.total;
+        const vat = Math.round((total - subtotal) * 100) / 100;
+        // Use the JE's vat_reporting_date as the bucketing date — this is
+        // what determines which 874 period this invoice belongs to.
+        return {
+          id: row.id,
+          status: row.status,
+          supplierName: c.supplier.name,
+          supplierTaxId: c.supplier.tax_id,
+          invoiceNumber: c.invoice.number,
+          date: invoiceToReportingDate.get(row.id) ?? c.invoice.date,
+          currency: c.invoice.currency,
+          subtotal,
+          vat,
+          total,
+        };
+      })
+      .filter((r): r is InvoiceForReport => r !== null);
+  }
 
   const invoices: InvoiceForReport[] = allInvoices
-    .filter((r) => r.date >= range.from && r.date <= range.to)
     .sort((a, b) => a.date.localeCompare(b.date));
 
   const totals = invoices.reduce(

@@ -1,12 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import {
   getStandardVatRate,
+  getVatRateForDate,
   calculateVat,
   isAllocationRequired,
   getAllocationThreshold,
   applyMixedDeduction,
   reconcileRounding,
   RoundingMismatchError,
+  isWithinSixMonthRule,
+  daysSinceInvoice,
+  SIX_MONTH_RULE_DAYS,
 } from '../src/index.js';
 
 describe('getStandardVatRate', () => {
@@ -104,5 +108,59 @@ describe('reconcileRounding', () => {
   it('zero adjustment when stated already matches', () => {
     const r = reconcileRounding({ subtotal: 5488.14, vat: 987.86, total: 6476.0 });
     expect(r.adjustment).toBe(0);
+  });
+});
+
+describe('getVatRateForDate — historical rates', () => {
+  it('returns 18% for 2025+', () => {
+    expect(getVatRateForDate('2025-01-01')).toBe(18);
+    expect(getVatRateForDate('2026-05-15')).toBe(18);
+  });
+  it('returns 17% for 2015-10-01 to 2024-12-31', () => {
+    expect(getVatRateForDate('2024-12-31')).toBe(17);
+    expect(getVatRateForDate('2020-06-15')).toBe(17);
+    expect(getVatRateForDate('2015-10-01')).toBe(17);
+  });
+  it('returns 18% for 2013-06-02 to 2015-09-30', () => {
+    expect(getVatRateForDate('2015-09-30')).toBe(18);
+    expect(getVatRateForDate('2014-01-01')).toBe(18);
+    expect(getVatRateForDate('2013-06-02')).toBe(18);
+  });
+  it('returns 16% for 2010-01-01 to 2013-06-01', () => {
+    expect(getVatRateForDate('2013-06-01')).toBe(16);
+    expect(getVatRateForDate('2011-12-31')).toBe(16);
+  });
+  it('returns 15.5% for 2009-07-01 to 2009-12-31', () => {
+    expect(getVatRateForDate('2009-08-15')).toBe(15.5);
+    expect(getVatRateForDate('2009-12-31')).toBe(15.5);
+  });
+  it('falls back to 15.5% for very old dates', () => {
+    expect(getVatRateForDate('2000-01-01')).toBe(15.5);
+  });
+});
+
+describe('isWithinSixMonthRule + daysSinceInvoice', () => {
+  it('counts days correctly', () => {
+    expect(daysSinceInvoice('2026-01-01', '2026-01-01')).toBe(0);
+    expect(daysSinceInvoice('2026-01-01', '2026-02-01')).toBe(31);
+    expect(daysSinceInvoice('2026-01-15', '2026-04-20')).toBe(95);
+  });
+  it('clamps to 0 if recording is before invoice', () => {
+    expect(daysSinceInvoice('2026-05-01', '2026-04-30')).toBe(0);
+  });
+  it('within 6 months — VAT recoverable', () => {
+    expect(isWithinSixMonthRule('2026-01-15', '2026-04-20')).toBe(true);
+    expect(isWithinSixMonthRule('2026-01-01', '2026-06-29')).toBe(true);
+  });
+  it('past 6 months — VAT NOT recoverable', () => {
+    expect(isWithinSixMonthRule('2026-01-01', '2026-09-01')).toBe(false);
+    expect(isWithinSixMonthRule('2025-12-15', '2026-08-01')).toBe(false);
+  });
+  it('exactly at boundary (180 days) — still recoverable', () => {
+    // 2026-01-01 + 180 days = 2026-06-30
+    expect(isWithinSixMonthRule('2026-01-01', '2026-06-30')).toBe(true);
+  });
+  it('SIX_MONTH_RULE_DAYS constant is 180', () => {
+    expect(SIX_MONTH_RULE_DAYS).toBe(180);
   });
 });

@@ -9,7 +9,12 @@ export type ValidationErrorCode =
   | 'DATE_OUT_OF_RANGE'
   | 'ALLOCATION_REQUIRED'
   | 'DUPLICATE_INVOICE'
-  | 'INVALID_CURRENCY';
+  | 'INVALID_CURRENCY'
+  | 'MISSING_SUPPLIER_NAME'
+  | 'MISSING_INVOICE_NUMBER'
+  | 'MISSING_INVOICE_DATE'
+  | 'MISSING_SUBTOTAL'
+  | 'MISSING_TOTAL';
 
 export type ValidationWarningCode =
   | 'VAT_RATE_DEVIATION'
@@ -18,7 +23,9 @@ export type ValidationWarningCode =
   | 'OCR_LOW_CONFIDENCE'
   | 'ALLOCATION_FORMAT_UNUSUAL'
   | 'ALLOCATION_NUMBER_NOT_VERIFIED'
-  | 'NON_ILS_CURRENCY';
+  | 'NON_ILS_CURRENCY'
+  | 'MISSING_SUPPLIER_TAX_ID'
+  | 'INVALID_SUPPLIER_TAX_ID';
 
 export interface ValidationError {
   code: ValidationErrorCode;

@@ -163,6 +163,7 @@ export async function upsertPayrollEntryAction(
         reference1: record.reference1,
         document_date: record.documentDate,
         value_date: record.valueDate,
+        vat_reporting_date: new Date().toISOString().slice(0, 10),
         currency: 'ILS',
         details: record.details,
         created_by: me.id,

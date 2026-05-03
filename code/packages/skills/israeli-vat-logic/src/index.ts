@@ -1,5 +1,7 @@
 export {
   getStandardVatRate,
+  getVatRateForDate,
+  VAT_RATE_HISTORY,
   calculateVat,
   round,
   STANDARD_VAT_CHANGEOVER_DATE,
@@ -7,6 +9,12 @@ export {
   VAT_RATE_FROM_2025,
 } from './rates.js';
 export type { StandardVatRate } from './rates.js';
+
+export {
+  isWithinSixMonthRule,
+  daysSinceInvoice,
+  SIX_MONTH_RULE_DAYS,
+} from './six-month-rule.js';
 
 export { getAllocationThreshold, isAllocationRequired } from './allocation.js';
 
