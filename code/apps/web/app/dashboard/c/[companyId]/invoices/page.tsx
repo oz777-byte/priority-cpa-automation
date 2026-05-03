@@ -16,6 +16,7 @@ interface DBInvoice {
   status: string;
   canonical: unknown;
   created_at: string;
+  reviewed_at: string | null;
 }
 
 export default async function CompanyInvoicesPage({
@@ -29,7 +30,7 @@ export default async function CompanyInvoicesPage({
 
   const { data: rows } = await admin
     .from('invoices_inbox')
-    .select('id, status, canonical, created_at')
+    .select('id, status, canonical, created_at, reviewed_at')
     .eq('company_id', company.id)
     .order('created_at', { ascending: false });
 
@@ -69,6 +70,7 @@ export default async function CompanyInvoicesPage({
         date: c.invoice.date,
         totalIls: c.totals.total,
         status,
+        reviewedAt: row.reviewed_at,
       } satisfies InvoiceListRow;
     })
     .filter((r): r is InvoiceListRow => r !== null);

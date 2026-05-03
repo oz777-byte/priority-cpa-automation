@@ -15,6 +15,7 @@ export interface SupplierRow {
   default_cost_center: string | null;
   payment_terms: string | null;
   invoiceCount: number;
+  learnedFromCount: number;
 }
 
 type EditState =
@@ -96,7 +97,17 @@ export function SuppliersPanel({
       dir: 'ltr',
       monospace: true,
       cell: (r) => (
-        <span className="text-ink-700">{r.default_expense_account ?? '—'}</span>
+        <span className="text-ink-700 flex items-center gap-1.5">
+          {r.default_expense_account ?? '—'}
+          {r.learnedFromCount > 0 && (
+            <span
+              className="text-[9px] px-1.5 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded font-medium"
+              title={`נלמד אוטומטית מעריכת ${r.learnedFromCount} חשבוניות`}
+            >
+              נלמד {r.learnedFromCount}×
+            </span>
+          )}
+        </span>
       ),
       value: (r) => r.default_expense_account ?? '',
     },

@@ -186,3 +186,90 @@ export async function createInvoiceFromOcrAction(args: {
   revalidatePath('/dashboard', 'layout');
   return { ok: true, invoiceId: row.id as string };
 }
+
+const BulkReviewInput = z.object({
+  companyId: z.string().uuid(),
+  invoiceIds: z.array(z.string().uuid()).min(1).max(200),
+});
+
+export interface BulkReviewResult {
+  ok: boolean;
+  error?: string;
+  marked?: number;
+}
+
+/**
+ * Bulk-mark invoices as reviewed by the current user. Used by the inbox
+ * checkbox UI to clear out a batch of OCR'd invoices that the CPA has
+ * verified at-a-glance, without needing to click into each one.
+ */
+export async function bulkMarkInvoicesReviewedAction(args: {
+  companyId: string;
+  invoiceIds: string[];
+}): Promise<BulkReviewResult> {
+  const me = await requireUser();
+  const admin = getAdminClient();
+  const audit = new SupabaseAuditStore(admin);
+
+  const parsed = BulkReviewInput.safeParse(args);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.errors[0]?.message ?? 'נתונים לא תקינים' };
+  }
+
+  const company = await loadCompanyForUser(me.id, me.email, parsed.data.companyId);
+
+  const { error, count } = await admin
+    .from('invoices_inbox')
+    .update({
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: me.id,
+    }, { count: 'exact' })
+    .in('id', parsed.data.invoiceIds)
+    .eq('company_id', company.id)
+    .is('reviewed_at', null);
+  if (error) return { ok: false, error: error.message };
+
+  await audit.log({
+    companyId: company.id,
+    userId: me.id,
+    action: 'invoice.bulk_review',
+    entityType: 'invoice',
+    entityId: parsed.data.invoiceIds[0] as string,
+    payload: {
+      total_marked: count ?? 0,
+      ids: parsed.data.invoiceIds,
+      reviewer: me.email,
+    },
+  });
+
+  revalidatePath(`/dashboard/c/${company.id}/invoices`);
+  return { ok: true, marked: count ?? 0 };
+}
+
+const UnreviewInput = z.object({
+  companyId: z.string().uuid(),
+  invoiceId: z.string().uuid(),
+});
+
+export async function unmarkInvoiceReviewedAction(args: {
+  companyId: string;
+  invoiceId: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const me = await requireUser();
+  const admin = getAdminClient();
+
+  const parsed = UnreviewInput.safeParse(args);
+  if (!parsed.success) return { ok: false, error: 'נתונים לא תקינים' };
+
+  const company = await loadCompanyForUser(me.id, me.email, parsed.data.companyId);
+
+  const { error } = await admin
+    .from('invoices_inbox')
+    .update({ reviewed_at: null, reviewed_by: null })
+    .eq('id', parsed.data.invoiceId)
+    .eq('company_id', company.id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/dashboard/c/${company.id}/invoices`);
+  return { ok: true };
+}

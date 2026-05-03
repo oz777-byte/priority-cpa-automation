@@ -165,6 +165,20 @@ export async function updateLineAction(formData: FormData): Promise<{ ok: boolea
     .eq('id', parsed.data.lineId);
   if (error) return { ok: false, error: error.message };
 
+  // ── Supplier auto-learning ───────────────────────────────────────
+  // When the user changes a JE line's *account* on an expense line of
+  // an invoice-driven JE, we treat that as training: save the new
+  // account as the supplier's default_expense_account so future invoices
+  // from the same supplier auto-fill correctly.
+  if (parsed.data.account !== undefined) {
+    await maybeLearnSupplierExpenseAccount({
+      admin,
+      lineId: parsed.data.lineId,
+      newAccount: parsed.data.account,
+      userId: me.id,
+    });
+  }
+
   await audit.log({
     companyId: access.companyId,
     userId: me.id,
@@ -176,6 +190,109 @@ export async function updateLineAction(formData: FormData): Promise<{ ok: boolea
 
   revalidatePath('/dashboard', 'layout');
   return { ok: true };
+}
+
+/**
+ * If the line being edited is the expense (DR) line of an invoice-driven JE,
+ * and the new account differs from the supplier's existing default — update
+ * the supplier master so future invoices auto-fill with this account.
+ *
+ * Heuristic for "this is the expense line":
+ *   1. The JE has an invoice_id (came from a supplier invoice)
+ *   2. The line has debit > 0 (DR side)
+ *   3. The line account is NOT the VAT input account (205-x)
+ *   4. The line account is NOT the supplier's own credit account
+ */
+async function maybeLearnSupplierExpenseAccount(args: {
+  admin: ReturnType<typeof getAdminClient>;
+  lineId: string;
+  newAccount: string;
+  userId: string;
+}): Promise<void> {
+  const { admin, lineId, newAccount } = args;
+
+  // 1. Fetch the line + its JE + invoice + supplier in one chained query.
+  const { data: line } = await admin
+    .from('journal_entry_lines')
+    .select('je_id, debit, credit')
+    .eq('id', lineId)
+    .maybeSingle();
+  if (!line || Number(line.debit) <= 0) return; // not a DR line
+
+  const { data: je } = await admin
+    .from('journal_entries')
+    .select('id, company_id, invoice_id')
+    .eq('id', line.je_id as string)
+    .maybeSingle();
+  if (!je || !je.invoice_id) return; // not invoice-driven
+
+  // Don't overwrite VAT or supplier-credit accounts.
+  // VAT input accounts conventionally start with "205".
+  if (/^205/.test(newAccount)) return;
+
+  const { data: inv } = await admin
+    .from('invoices_inbox')
+    .select('canonical')
+    .eq('id', je.invoice_id as string)
+    .maybeSingle();
+  if (!inv) return;
+
+  const canonical = inv.canonical as
+    | { supplier?: { tax_id?: string; internal_code_priority?: string } }
+    | null;
+  const supplierTaxId = canonical?.supplier?.tax_id ?? null;
+  const supplierCode = canonical?.supplier?.internal_code_priority ?? null;
+  // Don't overwrite when the user just typed the supplier's own credit code.
+  if (supplierCode && newAccount === supplierCode) return;
+
+  // 2. Find the supplier master row.
+  type SupplierRowShape = {
+    id: string;
+    default_expense_account: string | null;
+    learned_from_count: number;
+  };
+  let supplierRow: SupplierRowShape | null = null;
+  if (supplierTaxId) {
+    const { data } = await admin
+      .from('suppliers')
+      .select('id, default_expense_account, learned_from_count')
+      .eq('company_id', je.company_id as string)
+      .eq('tax_id', supplierTaxId)
+      .maybeSingle();
+    supplierRow = (data as unknown as SupplierRowShape | null) ?? null;
+  }
+  if (!supplierRow && supplierCode) {
+    const { data } = await admin
+      .from('suppliers')
+      .select('id, default_expense_account, learned_from_count')
+      .eq('company_id', je.company_id as string)
+      .eq('internal_code', supplierCode)
+      .maybeSingle();
+    supplierRow = (data as unknown as SupplierRowShape | null) ?? null;
+  }
+  if (!supplierRow) return;
+
+  // 3. Update only if the account actually differs from current default.
+  if (supplierRow.default_expense_account === newAccount) {
+    // Same as current default — just bump the count to reinforce.
+    await admin
+      .from('suppliers')
+      .update({
+        learned_from_count: (supplierRow.learned_from_count ?? 0) + 1,
+        last_learned_at: new Date().toISOString(),
+      })
+      .eq('id', supplierRow.id);
+    return;
+  }
+
+  await admin
+    .from('suppliers')
+    .update({
+      default_expense_account: newAccount,
+      learned_from_count: (supplierRow.learned_from_count ?? 0) + 1,
+      last_learned_at: new Date().toISOString(),
+    })
+    .eq('id', supplierRow.id);
 }
 
 const AddLineInput = z.object({

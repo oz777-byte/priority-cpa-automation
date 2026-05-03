@@ -15,6 +15,7 @@ interface DBSupplier {
   default_expense_account: string | null;
   default_cost_center: string | null;
   payment_terms: string | null;
+  learned_from_count: number;
 }
 
 export default async function SuppliersPage({
@@ -29,7 +30,7 @@ export default async function SuppliersPage({
   const { data: suppliers } = await admin
     .from('suppliers')
     .select(
-      'id, name, internal_code, tax_id, dealer_status, default_expense_account, default_cost_center, payment_terms',
+      'id, name, internal_code, tax_id, dealer_status, default_expense_account, default_cost_center, payment_terms, learned_from_count',
     )
     .eq('company_id', company.id)
     .order('name', { ascending: true });
@@ -64,6 +65,7 @@ export default async function SuppliersPage({
     default_cost_center: s.default_cost_center,
     payment_terms: s.payment_terms,
     invoiceCount: s.tax_id ? invoiceCountByTaxId.get(s.tax_id) ?? 0 : 0,
+    learnedFromCount: s.learned_from_count ?? 0,
   }));
 
   return (
