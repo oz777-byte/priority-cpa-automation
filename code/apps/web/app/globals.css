@@ -16,3 +16,47 @@
     transform: scaleX(-1);
   }
 }
+
+/* ─── Print styles for reports (Ctrl+P → PDF) ─── */
+@media print {
+  @page {
+    size: A4;
+    margin: 1.2cm 1.5cm;
+  }
+
+  body {
+    background: white !important;
+  }
+
+  /* Hide chrome (sidebar, top nav, etc) */
+  aside, header, nav, .print\:hidden {
+    display: none !important;
+  }
+
+  /* Reset main layout for print */
+  main, .max-w-5xl, .max-w-6xl, [class*='max-w-'] {
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Tables: avoid breaking rows across pages */
+  tr, td, th {
+    page-break-inside: avoid;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  /* Use real borders, not Tailwind shadows */
+  .rounded-xl, .rounded-lg, .rounded {
+    border-radius: 0 !important;
+  }
+
+  /* Ensure background colors print (Chrome) */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
