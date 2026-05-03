@@ -39,6 +39,17 @@ export type {
   CashBankConstructResult,
 } from './cash-bank-types.js';
 
+// Payroll — three JEs per employee-month (gross/net + employer + payment).
+export { constructPayrollJEs } from './payroll-builders.js';
+export type {
+  PayrollScenario,
+  PayrollConfig,
+  PayrollEntry,
+  PayrollJELine,
+  PayrollJERecord,
+  PayrollConstructResult,
+} from './payroll-types.js';
+
 /**
  * Build a balanced multi-record JE from a canonical invoice + company config.
  *
