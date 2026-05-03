@@ -18,8 +18,7 @@ alter table companies
   add column if not exists vat_filing_frequency vat_filing_frequency not null default 'bimonthly';
 
 comment on column companies.vat_basis is
-  'accrual = report VAT by invoice/value date (default for limited companies). ' ||
-  'cash = report VAT by payment date (small businesses < 1.95M ILS turnover).';
+  'accrual = report VAT by invoice/value date (default for limited companies). cash = report VAT by payment date (small businesses < 1.95M ILS turnover).';
 
 -- ─── 2. suppliers — dealer status ───────────────────────────────────
 create type supplier_dealer_status as enum (
@@ -51,9 +50,7 @@ create index if not exists journal_entries_vat_reporting_idx
   on journal_entries(company_id, vat_reporting_date);
 
 comment on column journal_entries.vat_reporting_date is
-  'Date this JE should be reported in PCN874. Defaults to value_date, but ' ||
-  'for late-arriving invoices = the recording date (when entered in books). ' ||
-  'Israeli VAT law (סעיף 38א) limits VAT recovery to 6 months from invoice date.';
+  'Date this JE should be reported in PCN874. Defaults to value_date, but for late-arriving invoices = the recording date (when entered in books). Israeli VAT law (section 38a) limits VAT recovery to 6 months from invoice date.';
 
 -- ─── 4. vat_rates_history — historical rates by effective date ──────
 create table if not exists vat_rates_history (
@@ -71,9 +68,7 @@ insert into vat_rates_history (effective_from, rate, notes) values
 on conflict (effective_from) do nothing;
 
 comment on table vat_rates_history is
-  'Historical Israeli VAT rates by effective date. Used to compute correct ' ||
-  'VAT for invoices dated before current rate (e.g. a 2024 invoice received ' ||
-  'in 2025 must be recorded at 17%, not 18%).';
+  'Historical Israeli VAT rates by effective date. Used to compute correct VAT for invoices dated before current rate (e.g. a 2024 invoice received in 2025 must be recorded at 17%, not 18%).';
 
 -- Helper function for application code.
 create or replace function get_vat_rate_for_date(supply_date date)
