@@ -29,6 +29,9 @@ const ExtractedSchema = z.object({
       total: z.number().nonnegative().optional(),
     })
     .optional(),
+  // Overall OCR confidence (0..1) — when present + above company threshold,
+  // the invoice is auto-marked as reviewed on creation.
+  confidence: z.number().min(0).max(1).optional(),
 });
 
 export interface BulkCreateResult {
@@ -147,8 +150,22 @@ export async function createInvoiceFromOcrAction(args: {
       source: 'ocr_bulk',
       ingested_at: new Date().toISOString(),
       original_filename: args.fileName,
+      ...(typeof e.confidence === 'number' ? { ocr_confidence: e.confidence } : {}),
     },
   };
+
+  // Auto-approve when company opted in + OCR confidence meets threshold.
+  // Pulls company.auto_approve_ocr_threshold (column from migration 0019).
+  const { data: companyMeta } = await admin
+    .from('companies')
+    .select('auto_approve_ocr_threshold')
+    .eq('id', company.id)
+    .maybeSingle();
+  const threshold = (companyMeta?.auto_approve_ocr_threshold as number | null) ?? null;
+  const autoApprove =
+    threshold !== null &&
+    typeof e.confidence === 'number' &&
+    e.confidence >= threshold;
 
   const { data: row, error } = await admin
     .from('invoices_inbox')
@@ -159,6 +176,9 @@ export async function createInvoiceFromOcrAction(args: {
       fingerprint,
       status: 'queued',
       ...(args.pdfPath ? { pdf_path: args.pdfPath } : {}),
+      ...(autoApprove
+        ? { reviewed_at: new Date().toISOString(), reviewed_by: me.id }
+        : {}),
     })
     .select('id')
     .single();

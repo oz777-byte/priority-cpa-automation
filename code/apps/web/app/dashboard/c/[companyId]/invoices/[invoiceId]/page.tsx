@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowRight, FileEdit, FileText } from 'lucide-react';
+import { ArrowRight, FileEdit, FileText, History } from 'lucide-react';
 import {
   CanonicalInvoiceSchema,
   type CanonicalInvoice,
@@ -16,6 +16,7 @@ import {
   buildMoveInConfig,
   type CompanySettings,
 } from '@/lib/company-config';
+import { EditableField, ConfidenceBadge } from './editable-field';
 
 export const dynamic = 'force-dynamic';
 
@@ -81,6 +82,19 @@ export default async function InvoiceDetailPage({
   const subtotal = inv.totals.subtotal;
   const total = inv.totals.total;
   const vat = Math.round((total - subtotal) * 100) / 100;
+
+  // OCR confidence (overall, from canonical metadata).
+  const ocrConfidence: number | null = (() => {
+    const conf = inv.metadata?.ocr_confidence;
+    return typeof conf === 'number' ? conf : null;
+  })();
+
+  // Count of prior OCR corrections on this invoice (for the badge).
+  const { count: correctionsCountRaw } = await admin
+    .from('ocr_corrections')
+    .select('id', { count: 'exact', head: true })
+    .eq('invoice_id', params.invoiceId);
+  const correctionsCount = correctionsCountRaw ?? 0;
   const lines = [
     { account: settings.expense_account ?? '502-0', label: 'הוצאה', debit: subtotal, credit: 0 },
     { account: settings.vat_input_account ?? '205-2', label: 'מע"מ תשומות', debit: vat, credit: 0 },
@@ -120,27 +134,104 @@ export default async function InvoiceDetailPage({
       </div>
 
       <header>
-        <h2 className="text-lg font-bold text-ink-900">{inv.supplier.name}</h2>
+        <h2 className="text-lg font-bold text-ink-900">
+          <EditableField
+            companyId={company.id}
+            invoiceId={params.invoiceId}
+            fieldPath="supplier.name"
+            value={inv.supplier.name}
+          />
+        </h2>
         <p className="text-ink-600 mt-1 text-sm">
-          חשבונית <span dir="ltr">{inv.invoice.number}</span> ·
-          תאריך <span dir="ltr">{inv.invoice.date}</span> ·
+          חשבונית{' '}
+          <EditableField
+            companyId={company.id}
+            invoiceId={params.invoiceId}
+            fieldPath="invoice.number"
+            value={inv.invoice.number}
+            inputDir="ltr"
+            displayValue={<span dir="ltr">{inv.invoice.number}</span>}
+          />{' '}
+          ·
+          תאריך{' '}
+          <EditableField
+            companyId={company.id}
+            invoiceId={params.invoiceId}
+            fieldPath="invoice.date"
+            value={inv.invoice.date}
+            inputType="date"
+            inputDir="ltr"
+            displayValue={<span dir="ltr">{inv.invoice.date}</span>}
+          />{' '}
+          ·
           סטטוס: <strong>{statusLabel(invRow.status)}</strong>
+          {ocrConfidence !== null && (
+            <span className="mr-2">
+              · <ConfidenceBadge confidence={ocrConfidence} />
+            </span>
+          )}
+          {correctionsCount > 0 && (
+            <span className="mr-2 text-xs text-purple-700 inline-flex items-center gap-1">
+              · <History size={11} /> {correctionsCount} תיקוני OCR
+            </span>
+          )}
         </p>
       </header>
 
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-ink-50/60 border border-ink-200 rounded-xl p-5">
-          <h3 className="font-semibold text-ink-900 mb-3">פרטי החשבונית</h3>
+          <h3 className="font-semibold text-ink-900 mb-3 flex items-center justify-between">
+            <span>פרטי החשבונית</span>
+            <span className="text-[10px] font-normal text-ink-500">
+              עברו עם העכבר על שדה כדי לתקן
+            </span>
+          </h3>
           <dl className="text-sm space-y-2">
-            <Row label="ע.מ ספק"><span dir="ltr">{inv.supplier.tax_id}</span></Row>
+            <Row label="ע.מ ספק">
+              <EditableField
+                companyId={company.id}
+                invoiceId={params.invoiceId}
+                fieldPath="supplier.tax_id"
+                value={inv.supplier.tax_id}
+                inputDir="ltr"
+                displayValue={<span dir="ltr">{inv.supplier.tax_id || '—'}</span>}
+              />
+            </Row>
             <Row label="קוד ספק פנימי"><span dir="ltr">{inv.supplier.internal_code_priority}</span></Row>
             <Row label="מטבע"><span dir="ltr">{inv.invoice.currency}</span></Row>
-            <Row label="סכום ביניים">{subtotal.toFixed(2)} ₪</Row>
+            <Row label="סכום ביניים">
+              <EditableField
+                companyId={company.id}
+                invoiceId={params.invoiceId}
+                fieldPath="totals.subtotal"
+                value={String(subtotal)}
+                inputType="number"
+                inputDir="ltr"
+                displayValue={<>{subtotal.toFixed(2)} ₪</>}
+              />
+            </Row>
             <Row label="מע&quot;מ (מחושב)">{vat.toFixed(2)} ₪</Row>
-            <Row label="סה&quot;כ"><strong>{total.toFixed(2)} ₪</strong></Row>
-            {inv.invoice.allocation_number && (
-              <Row label="מספר הקצאה"><span dir="ltr">{inv.invoice.allocation_number}</span></Row>
-            )}
+            <Row label="סה&quot;כ">
+              <EditableField
+                companyId={company.id}
+                invoiceId={params.invoiceId}
+                fieldPath="totals.total"
+                value={String(total)}
+                inputType="number"
+                inputDir="ltr"
+                displayValue={<strong>{total.toFixed(2)} ₪</strong>}
+              />
+            </Row>
+            <Row label="מספר הקצאה">
+              <EditableField
+                companyId={company.id}
+                invoiceId={params.invoiceId}
+                fieldPath="invoice.allocation_number"
+                value={inv.invoice.allocation_number ?? ''}
+                inputDir="ltr"
+                displayValue={<span dir="ltr">{inv.invoice.allocation_number ?? '—'}</span>}
+              />
+            </Row>
           </dl>
         </div>
 

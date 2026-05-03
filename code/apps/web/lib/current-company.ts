@@ -22,6 +22,7 @@ export interface CompanyRow {
   inbox_token: string | null;
   vat_basis?: 'accrual' | 'cash';
   vat_filing_frequency?: 'monthly' | 'bimonthly' | 'annual';
+  auto_approve_ocr_threshold?: number | null;
   created_at: string;
 }
 

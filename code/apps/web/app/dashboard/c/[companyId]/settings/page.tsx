@@ -221,6 +221,23 @@ export default async function CompanySettingsPage({
           </div>
         </FormSection>
 
+        <FormSection
+          icon={AlertCircle}
+          title="אישור אוטומטי של OCR"
+          description="חשבוניות שיתקבלו עם רמת ביטחון OCR מעל הסף יסומנו אוטומטית כ&quot;נבדקו&quot; — חוסך לחיצות ידניות."
+        >
+          <Field
+            name="auto_approve_ocr_threshold"
+            label="סף ביטחון אוטומטי (0.50–1.00)"
+            defaultValue={
+              (company as { auto_approve_ocr_threshold?: number | null }).auto_approve_ocr_threshold?.toString() ?? ''
+            }
+            placeholder='ריק = כיבוי'
+            dir="ltr"
+            hint='ערך מומלץ: 0.90. תחת הסף תמיד נדרשת בדיקה ידנית.'
+          />
+        </FormSection>
+
         <div className="flex justify-end gap-3 pt-2">
           <button
             type="submit"

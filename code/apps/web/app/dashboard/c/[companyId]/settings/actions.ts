@@ -33,6 +33,11 @@ const Input = z.object({
   // Top-level VAT meta on companies table (not in settings jsonb).
   vat_basis: z.enum(['accrual', 'cash']).optional(),
   vat_filing_frequency: z.enum(['monthly', 'bimonthly', 'annual']).optional(),
+  // Auto-approve OCR threshold (0..1, or null to disable).
+  auto_approve_ocr_threshold: z
+    .union([z.coerce.number().min(0).max(1), z.literal('')])
+    .optional()
+    .transform((v) => (v === '' || v === undefined ? null : v)),
 });
 
 export interface UpdateSettingsResult {
@@ -61,6 +66,7 @@ export async function updateCompanySettingsAction(
     non_deductible_account: formData.get('non_deductible_account') ?? undefined,
     vat_basis: formData.get('vat_basis') ?? undefined,
     vat_filing_frequency: formData.get('vat_filing_frequency') ?? undefined,
+    auto_approve_ocr_threshold: formData.get('auto_approve_ocr_threshold') ?? '',
   });
   if (!parsed.success) {
     return {
@@ -68,7 +74,7 @@ export async function updateCompanySettingsAction(
       error: parsed.error.errors[0]?.message ?? 'נתונים לא תקינים',
     };
   }
-  const { companyId, vat_basis, vat_filing_frequency, ...incoming } = parsed.data;
+  const { companyId, vat_basis, vat_filing_frequency, auto_approve_ocr_threshold, ...incoming } = parsed.data;
   const company = await loadCompanyForUser(me.id, me.email, companyId);
 
   // Merge with existing — only overwrite fields actually present in the form.
@@ -82,10 +88,13 @@ export async function updateCompanySettingsAction(
     }
   }
 
-  // Build top-level update payload (vat_basis + vat_filing_frequency are columns, not jsonb).
+  // Build top-level update payload (vat_basis, vat_filing_frequency,
+  // auto_approve_ocr_threshold are columns, not jsonb).
   const updatePayload: Record<string, unknown> = { settings: merged };
   if (vat_basis) updatePayload.vat_basis = vat_basis;
   if (vat_filing_frequency) updatePayload.vat_filing_frequency = vat_filing_frequency;
+  // Always write — null clears the threshold (disables auto-approve).
+  updatePayload.auto_approve_ocr_threshold = auto_approve_ocr_threshold;
 
   const { error } = await admin
     .from('companies')

@@ -366,6 +366,18 @@ function UserBlock({
               הערות שיפור חוקים
             </Link>
           )}
+          {isAdmin && (
+            <Link
+              href="/dashboard/admin/ocr-quality"
+              onClick={() => setOpen(false)}
+              className={`flex items-center gap-2 px-3 py-1.5 hover:bg-ink-50 ${
+                pathname === '/dashboard/admin/ocr-quality' ? 'bg-accent-500/10 text-accent-600' : 'text-ink-800'
+              }`}
+            >
+              <FileText size={13} />
+              איכות OCR
+            </Link>
+          )}
           <div className="border-t border-ink-100 my-1" />
           <button
             onClick={onLogout}
