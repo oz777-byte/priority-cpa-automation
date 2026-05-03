@@ -35,6 +35,7 @@ import {
   RefreshCw,
   Lock,
   PiggyBank,
+  CircleDollarSign,
 } from 'lucide-react';
 
 export type RuleStatus = 'auto' | 'auto-with-warning' | 'manual' | 'coming-soon';
@@ -1329,73 +1330,118 @@ const RULES_RAW: Omit<AccountingRule, 'id'>[] = [
     ],
   },
 
-  /* ────────────── תרחישים עתידיים — נכסי קבע ────────────── */
+  /* ────────────── נכסי קבע ופחת ────────────── */
 
   {
     code: 'ASSET_PURCHASE',
     title: 'רכישת נכס קבע',
     icon: Truck,
-    status: 'coming-soon',
+    status: 'auto',
     category: 'assets',
-    oneLiner: 'רכישת מחשב/רכב/ציוד — capitalize ב-DR נכס.',
-    description: 'במקום DR להוצאה, ה-DR הולך לנכס קבע (140-x). יוכר כפחת חודשי.',
-    triggers: ['חשבונית עם דגל is_fixed_asset'],
-    jeStructure: 'דומה ל-STANDARD אבל DR נכס במקום הוצאה.',
+    oneLiner: 'רכישת מחשב / רכב / ציוד — קפיטליזציה ל-DR נכס במקום הוצאה.',
+    description:
+      'בעת הוספת נכס דרך מסך "נכסי קבע" המערכת בונה JE שזוקף את הסכום לחשבון נכס (140-x) במקום להוצאה (502-0). הנכס נכנס למאסטר עם שיעור פחת שנתי וחיי שירות בחודשים, ומתחיל לצבור פחת בריצה החודשית הבאה.',
+    triggers: [
+      'הוספת נכס במסך "נכסי קבע ופחת"',
+      'חשבונית מסומנת is_fixed_asset (Phase עתידי — סימון אוטומטי בעת ה-OCR)',
+    ],
+    jeStructure: 'רשומה אחת, 3 שורות: DR נכס + DR מע"מ / CR ספק (או חשבון תשלום מיידי).',
     example: {
-      description: 'רכישת מחשב 5,000 ₪',
+      description: 'רכישת מחשב Lenovo 5,000 ₪ + מע"מ',
       invoice: { number: 'PC-001', subtotal: 5000, total: 5900 },
       je: [
-        { account: '140-2', side: 'DR', amount: '5000.00', label: 'מחשבים וציוד משרדי' },
+        { account: '140-2', side: 'DR', amount: '5000.00', label: 'מחשבים וציוד מחשוב' },
         { account: '205-2', side: 'DR', amount: '900.00', label: 'מע"מ תשומות' },
-        { account: '200xxx', side: 'CR', amount: '5900.00', label: 'ספק' },
+        { account: '200001', side: 'CR', amount: '5900.00', label: 'ספק' },
+      ],
+      notes: [
+        'שיעורי פחת שנתיים מומלצים: מחשבים 33%, רכבים 15%, מבנים 4%, ציוד משרדי 7%',
+        'אם תשלום מיידי — חשבון הזכות הוא בנק/אשראי במקום ספק',
       ],
     },
-    rules: ['בקרוב: רישום הנכס במאסטר נכסי קבע'],
+    rules: [
+      'הנכס נשמר במאסטר עם purchase_amount, depreciation_rate_annual, useful_life_months',
+      'JE רכישה נוצר אוטומטית עם ה-fixed_asset_id back-reference',
+      'בקרוב: סימון אוטומטי של חשבונית כ-fixed asset לפי ערך + קטגוריה',
+    ],
+    perCompanyOverrides: [
+      'חשבונות נכס פר-קטגוריה (140-1..140-9)',
+      'חשבונות פחת מצטבר פר-קטגוריה (149-1..149-9)',
+      'חשבון הוצאות פחת (610-0)',
+    ],
   },
 
   {
     code: 'ASSET_DEPRECIATION',
-    title: 'פחת חודשי',
+    title: 'פחת חודשי קו ישר',
     icon: TrendingDown,
-    status: 'coming-soon',
+    status: 'auto',
     category: 'assets',
-    oneLiner: 'הכרה חודשית בפחת — DR הוצאות פחת / CR פחת מצטבר.',
-    description: 'אוטומציה חודשית של פחת לפי שיעורי פקודת מס הכנסה.',
-    triggers: ['חודש סגור עם נכסים פעילים'],
-    jeStructure: 'DR 610-0 פחת / CR 149-x פחת מצטבר.',
+    oneLiner: 'הרצה חודשית — JE לכל נכס פעיל. (עלות − גרט) ÷ חיי שירות.',
+    description:
+      'בלחיצה על "הרץ פחת חודשי" המערכת עוברת על כל הנכסים הפעילים (in_service_date ≤ סוף חודש), מחשבת פחת קו ישר, ויוצרת JE 2 שורות לכל נכס. הריצה idempotent — חודש שכבר רץ מדולג. תקופה נעולה חוסמת את הריצה.',
+    triggers: [
+      'הפעלה מהמסך "נכסי קבע" → "הרץ פחת חודשי"',
+      'בעתיד: cron אוטומטי בסוף כל חודש',
+    ],
+    jeStructure: 'רשומה אחת, 2 שורות: DR הוצאות פחת (610-0) / CR פחת מצטבר (149-x).',
     example: {
-      description: 'פחת חודשי על מחשבים (33%/12)',
-      invoice: { subtotal: 138, total: 138 },
+      description: 'פחת חודשי על מחשב 5,000 ₪ בשיעור 33% שנתי',
+      invoice: { subtotal: 138.89, total: 138.89 },
       je: [
-        { account: '610-0', side: 'DR', amount: '138.00', label: 'פחת — ציוד משרדי' },
-        { account: '149-2', side: 'CR', amount: '138.00', label: 'פחת מצטבר — מחשבים' },
+        { account: '610-0', side: 'DR', amount: '138.89', label: 'הוצאות פחת — מחשבים' },
+        { account: '149-2', side: 'CR', amount: '138.89', label: 'פחת מצטבר — מחשבים' },
       ],
-      notes: ['שיעורי פחת ישראליים: מחשבים 33%, רכב 15%, מבנה 4%'],
+      notes: [
+        'חישוב: 5,000 / 36 חודשים = 138.89 ₪',
+        'חודש אחרון מתואם אוטומטית כדי לא לחרוג מ-purchase × (1 - salvage)',
+        'נכס מופחת מלא או לא פעיל — מדולג ללא JE',
+      ],
     },
-    rules: ['בקרוב: שיעורי פקודת מס הכנסה אוטומטיים'],
+    rules: [
+      'idempotent — לא תיווצר רשומה כפולה לאותו (asset, year, month)',
+      'חוסם תקופה נעולה (period.status != open)',
+      'מתעדכן fixed_asset.accumulated_depreciation אוטומטית',
+    ],
+    perCompanyOverrides: ['חשבון הוצאות פחת (610-0 ברירת מחדל)'],
   },
 
   {
     code: 'ASSET_SALE',
-    title: 'מכירת נכס',
-    icon: Truck,
-    status: 'coming-soon',
+    title: 'מכירת / הסרת נכס',
+    icon: CircleDollarSign,
+    status: 'auto',
     category: 'assets',
-    oneLiner: 'מכירת נכס קבע — חישוב רווח/הפסד.',
-    description: 'JE 4-5 שורות: DR בנק (תמורה) + DR פחת מצטבר / CR נכס + רווח/הפסד.',
-    triggers: ['סימון "מכירת נכס" במאסטר'],
-    jeStructure: '4-5 שורות. הפרש בין תמורה ליתרת נכס = רווח/הפסד.',
+    oneLiner: 'מכירת נכס קבע או הסרה ללא תמורה — חישוב רווח/הפסד הון אוטומטי.',
+    description:
+      'מסגירה את כל היתרות של הנכס: פחת מצטבר מתבטל (DR), עלות הנכס מתבטלת (CR), ויש קו רווח/הפסד הון לפי ההפרש בין תמורה לערך פנקסני (NBV). אם בחרת "הסרה ללא תמורה" — כל ה-NBV יירשם כהפסד הון.',
+    triggers: ['פעולה ידנית מ"מכור / הסר" במסך נכסי קבע'],
+    jeStructure: '4-5 שורות (לפי תמורה ומע"מ). אם > 4 שורות — דורש פורמט FLEXIBLE.',
     example: {
-      description: 'מכירת מחשב ב-1500 ₪ (יתרה 2000 ₪)',
-      invoice: { subtotal: 1500, total: 1500 },
+      description: 'מכירת מחשב — עלות 5,000 / פחת מצטבר 3,000 / תמורה 2,500 + מע"מ',
+      invoice: { subtotal: 2500, total: 2950 },
       je: [
-        { account: '121-0', side: 'DR', amount: '1500.00', label: 'בנק' },
-        { account: '149-2', side: 'DR', amount: '3000.00', label: 'פחת מצטבר (מתבטל)' },
-        { account: '744-0', side: 'DR', amount: '500.00', label: 'הפסד מכירת נכס' },
-        { account: '140-2', side: 'CR', amount: '5000.00', label: 'מחשבים (מתבטל)' },
+        { account: '121-0', side: 'DR', amount: '2950.00', label: 'בנק (תקבול)' },
+        { account: '149-2', side: 'DR', amount: '3000.00', label: 'סגירת פחת מצטבר' },
+        { account: '140-2', side: 'CR', amount: '5000.00', label: 'סגירת נכס — מחשבים' },
+        { account: '220-0', side: 'CR', amount: '450.00', label: 'מע"מ עסקאות' },
+        { account: '744-0', side: 'CR', amount: '500.00', label: 'רווח הון ממכירת נכס' },
+      ],
+      notes: [
+        'NBV = עלות 5,000 - מצטבר 3,000 = 2,000',
+        'תמורה 2,500 - NBV 2,000 = רווח 500',
+        'בהפסד — DR 625-0 הפסד הון במקום CR 744-0 רווח הון',
       ],
     },
-    rules: ['בקרוב'],
+    rules: [
+      'הנכס משנה סטטוס ל-sold/disposed עם retired_date + retirement_je_id',
+      'אזהרה אם > 4 שורות (פורמט 180 לא תומך)',
+      'אזהרה אם פחת מצטבר חורג מעלות הרכישה',
+    ],
+    perCompanyOverrides: [
+      'חשבון רווח הון (744-0 ברירת מחדל)',
+      'חשבון הפסד הון (625-0 ברירת מחדל)',
+    ],
   },
 
   /* ────────────── תרחישים עתידיים — מלאי ────────────── */

@@ -50,6 +50,23 @@ export type {
   PayrollConstructResult,
 } from './payroll-types.js';
 
+// Fixed assets — purchase / monthly depreciation / sale.
+export {
+  constructAssetPurchaseJE,
+  constructAssetDepreciationJE,
+  constructAssetSaleJE,
+  calculateMonthlyDepreciation,
+} from './asset-builders.js';
+export type {
+  AssetScenario,
+  AssetJELine,
+  AssetJERecord,
+  AssetPurchaseInput,
+  AssetDepreciationInput,
+  AssetSaleInput,
+  AssetConstructResult,
+} from './asset-types.js';
+
 /**
  * Build a balanced multi-record JE from a canonical invoice + company config.
  *
