@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import {
-  BookOpen,
+  Brain,
   CheckCircle2,
   AlertTriangle,
   Hand,
@@ -13,8 +13,10 @@ import {
   FileCode2,
   Settings2,
   Lightbulb,
+  Target,
+  Layers,
+  TrendingUp,
 } from 'lucide-react';
-import { PageHeader } from '@/components/page-header';
 import {
   RULES,
   CATEGORY_LABELS,
@@ -27,9 +29,75 @@ import { RuleNoteForm } from './note-form';
 
 type FilterKey = 'all' | RuleStatus;
 
+const CATEGORY_META: Record<
+  RuleCategory,
+  { label: string; emoji: string; tone: string; description: string }
+> = {
+  supplier: {
+    label: CATEGORY_LABELS.supplier,
+    emoji: '🧾',
+    tone: 'from-blue-500/10 to-blue-500/5 border-blue-200',
+    description: 'חשבוניות נכנסות מספקים — 17 תרחישים מסוגי החשבונית הנפוצים',
+  },
+  customer: {
+    label: CATEGORY_LABELS.customer,
+    emoji: '💼',
+    tone: 'from-emerald-500/10 to-emerald-500/5 border-emerald-200',
+    description: 'חשבוניות יוצאות ללקוחות — מסחרי, מזומן, ייצוא, חוב אבוד',
+  },
+  bank: {
+    label: CATEGORY_LABELS.bank,
+    emoji: '🏦',
+    tone: 'from-purple-500/10 to-purple-500/5 border-purple-200',
+    description: 'תנועות בנק ומזומן — עמלות, ריביות, העברות, צ\'קים שחזרו',
+  },
+  payroll: {
+    label: CATEGORY_LABELS.payroll,
+    emoji: '👥',
+    tone: 'from-pink-500/10 to-pink-500/5 border-pink-200',
+    description: 'תלושי שכר חודשיים — ברוטו, ניכויים, הפרשות מעביד, נטו',
+  },
+  assets: {
+    label: CATEGORY_LABELS.assets,
+    emoji: '🚚',
+    tone: 'from-amber-500/10 to-amber-500/5 border-amber-200',
+    description: 'נכסי קבע — קפיטליזציה, פחת חודשי קו ישר, מכירה / הסרה',
+  },
+  inventory: {
+    label: CATEGORY_LABELS.inventory,
+    emoji: '📦',
+    tone: 'from-cyan-500/10 to-cyan-500/5 border-cyan-200',
+    description: 'ניהול מלאי לעסקי מסחר — רכישות, COGS, ספירת מלאי',
+  },
+  period: {
+    label: CATEGORY_LABELS.period,
+    emoji: '📅',
+    tone: 'from-indigo-500/10 to-indigo-500/5 border-indigo-200',
+    description: 'התאמות סוף חודש ודיווחים רגולטוריים — PCN874, accrual, FX',
+  },
+  'year-end': {
+    label: CATEGORY_LABELS['year-end'],
+    emoji: '🗓️',
+    tone: 'from-rose-500/10 to-rose-500/5 border-rose-200',
+    description: 'סגירת שנת מס — סגירת הכנסות, הוצאות, מע"מ והעברת רווחים',
+  },
+};
+
+const CATEGORY_ORDER: RuleCategory[] = [
+  'supplier',
+  'customer',
+  'bank',
+  'payroll',
+  'assets',
+  'period',
+  'inventory',
+  'year-end',
+];
+
 export default function AccountingRulesPage() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [categoryFilter, setCategoryFilter] = useState<RuleCategory | null>(null);
   const [openCode, setOpenCode] = useState<string | null>(null);
 
   const counts = useMemo(
@@ -43,10 +111,27 @@ export default function AccountingRulesPage() {
     [],
   );
 
+  const activeCount = counts.auto + counts['auto-with-warning'];
+  const coveragePercent = Math.round((activeCount / counts.all) * 100);
+
+  const categoryCounts = useMemo(() => {
+    const map: Record<string, { total: number; active: number }> = {};
+    for (const r of RULES) {
+      const k = r.category;
+      if (!map[k]) map[k] = { total: 0, active: 0 };
+      map[k].total += 1;
+      if (r.status === 'auto' || r.status === 'auto-with-warning') {
+        map[k].active += 1;
+      }
+    }
+    return map;
+  }, []);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return RULES.filter((r) => {
       if (filter !== 'all' && r.status !== filter) return false;
+      if (categoryFilter && r.category !== categoryFilter) return false;
       if (!q) return true;
       return (
         r.title.toLowerCase().includes(q) ||
@@ -55,18 +140,163 @@ export default function AccountingRulesPage() {
         r.description.toLowerCase().includes(q)
       );
     });
-  }, [query, filter]);
+  }, [query, filter, categoryFilter]);
 
   return (
-    <div className="max-w-5xl mx-auto">
-      <PageHeader
-        icon={BookOpen}
-        title="ניהול חוקי הנהלת חשבונות"
-        description="כל אוטומציה במערכת היא חוק חשבונאי שבונה JE לסוג מסוים של חשבונית. לחץ על שורה לראות פירוט מלא: מתי היא מופעלת, איזה JE נבנה, דוגמה מספרית, וניתן לשינוי פר-חברה."
-      />
+    <div className="max-w-7xl mx-auto space-y-6">
+      {/* HERO — System brain dashboard */}
+      <section className="relative overflow-hidden bg-gradient-to-br from-accent-600 via-brand-600 to-brand-700 rounded-2xl p-8 text-white shadow-xl">
+        <div className="absolute top-0 left-0 w-72 h-72 bg-white/10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2"></div>
+        <div className="absolute bottom-0 right-0 w-96 h-96 bg-white/5 rounded-full blur-3xl translate-x-1/2 translate-y-1/2"></div>
+
+        <div className="relative z-10">
+          <div className="flex items-start gap-4 mb-6">
+            <div className="w-14 h-14 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center flex-shrink-0">
+              <Brain size={28} />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold leading-tight">המוח החשבונאי של המערכת</h1>
+              <p className="text-white/80 text-sm mt-1.5 leading-relaxed max-w-2xl">
+                כל אוטומציה חשבונאית במערכת היא חוק שבונה פקודת יומן (JE) לסוג ספציפי של חשבונית, תנועה או תרחיש.
+                {' '}המוח מזהה את התרחיש אוטומטית מתוך הנתונים, בונה את ה-JE לפי חוקי המס והחשבונאות הישראליים, ומאפשר לרו"ח לאשר או לחרוג.
+              </p>
+            </div>
+          </div>
+
+          {/* Big metrics */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
+            <HeroStat
+              icon={Target}
+              label="חוקים בסך הכול"
+              value={counts.all.toString()}
+              hint="ליבת המוח"
+            />
+            <HeroStat
+              icon={CheckCircle2}
+              label="פעילים בייצור"
+              value={activeCount.toString()}
+              hint={`${coveragePercent}% כיסוי`}
+              accent="emerald"
+            />
+            <HeroStat
+              icon={Layers}
+              label="קטגוריות"
+              value="8"
+              hint="מסחר · שירות · משכורות"
+            />
+            <HeroStat
+              icon={TrendingUp}
+              label="בקרוב"
+              value={counts['coming-soon'].toString()}
+              hint="ב-roadmap"
+              accent="amber"
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Coverage breakdown by status */}
+      <section className="bg-white border border-ink-200 rounded-xl p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-bold text-ink-900 flex items-center gap-2">
+            <Sparkles size={14} className="text-accent-500" />
+            מצב כיסוי
+          </h2>
+          <span className="text-xs text-ink-500 tabular-nums">{counts.all} חוקים סה״כ</span>
+        </div>
+        <div className="h-3 bg-ink-100 rounded-full overflow-hidden flex">
+          <div
+            className="bg-emerald-500 h-full transition-all"
+            style={{ width: `${(counts.auto / counts.all) * 100}%` }}
+            title={`אוטומטי: ${counts.auto}`}
+          />
+          <div
+            className="bg-amber-500 h-full transition-all"
+            style={{ width: `${(counts['auto-with-warning'] / counts.all) * 100}%` }}
+            title={`עם אזהרות: ${counts['auto-with-warning']}`}
+          />
+          <div
+            className="bg-purple-300 h-full transition-all"
+            style={{ width: `${(counts['coming-soon'] / counts.all) * 100}%` }}
+            title={`בקרוב: ${counts['coming-soon']}`}
+          />
+        </div>
+        <div className="flex flex-wrap gap-4 mt-3 text-xs text-ink-700">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+            אוטומטי <strong className="tabular-nums">{counts.auto}</strong>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+            אוטומטי עם אזהרות <strong className="tabular-nums">{counts['auto-with-warning']}</strong>
+          </span>
+          {counts.manual > 0 && (
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+              ידני <strong className="tabular-nums">{counts.manual}</strong>
+            </span>
+          )}
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-purple-300"></span>
+            בקרוב <strong className="tabular-nums">{counts['coming-soon']}</strong>
+          </span>
+        </div>
+      </section>
+
+      {/* Category overview cards */}
+      <section>
+        <h2 className="text-sm font-bold text-ink-900 mb-3 flex items-center gap-2">
+          <Layers size={14} className="text-accent-500" />
+          קטגוריות
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {CATEGORY_ORDER.map((cat) => {
+            const meta = CATEGORY_META[cat];
+            const stats = categoryCounts[cat] ?? { total: 0, active: 0 };
+            const isActive = categoryFilter === cat;
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setCategoryFilter(isActive ? null : cat)}
+                className={`relative bg-gradient-to-br ${meta.tone} border rounded-xl p-3 text-right transition-all hover:scale-[1.02] hover:shadow-md ${
+                  isActive ? 'ring-2 ring-accent-500 shadow-md' : ''
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <span className="text-2xl">{meta.emoji}</span>
+                  <div className="text-left">
+                    <div className="text-xl font-bold text-ink-900 tabular-nums leading-none">
+                      {stats.total}
+                    </div>
+                    <div className="text-[10px] text-ink-500 mt-0.5">
+                      {stats.active} פעילים
+                    </div>
+                  </div>
+                </div>
+                <div className="text-sm font-semibold text-ink-900 leading-tight">
+                  {meta.label}
+                </div>
+                <div className="text-[11px] text-ink-600 mt-1 leading-relaxed line-clamp-2">
+                  {meta.description}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        {categoryFilter && (
+          <button
+            type="button"
+            onClick={() => setCategoryFilter(null)}
+            className="mt-3 text-xs text-accent-600 hover:underline flex items-center gap-1"
+          >
+            ✕ נקה סינון קטגוריה ({CATEGORY_META[categoryFilter].label})
+          </button>
+        )}
+      </section>
 
       {/* Toolbar: search + filters */}
-      <div className="bg-white border border-ink-200 rounded-xl p-3 mb-4">
+      <section className="bg-white border border-ink-200 rounded-xl p-3 sticky top-2 z-20 shadow-sm">
         <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
           <div className="relative flex-1">
             <Search
@@ -77,7 +307,7 @@ export default function AccountingRulesPage() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="חיפוש לפי שם, קוד או תיאור..."
+              placeholder="חיפוש לפי שם / קוד / תיאור / תרחיש..."
               className="w-full pr-9 pl-3 py-2 border border-ink-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
             />
           </div>
@@ -124,31 +354,33 @@ export default function AccountingRulesPage() {
             />
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Compact info banners */}
-      <div className="grid sm:grid-cols-2 gap-3 mb-4">
-        <InfoBanner
-          icon={Settings2}
-          title="שתי שכבות"
-          body={
-            <>
-              <strong>אוניברסלי</strong> (קבוע בחוק): מע"מ, רף הקצאה, ניכוי מעורב.{' '}
-              <strong>פר-חברה</strong>: חשבונות, מרכזי עלות, מאסטר ספקים.
-            </>
-          }
-        />
-        <InfoBanner
-          icon={FileCode2}
-          title="פורמט ייצוא MOVEIN"
-          body={
-            <>
-              <strong>180</strong> סטנדרטי, <strong>FLEXIBLE</strong> אוטומטי כשנדרש
-              מרכז עלות, הקצאה ארוכה, או יותר מ-4 שורות.
-            </>
-          }
-        />
-      </div>
+      {!query && !categoryFilter && filter === 'all' && (
+        <section className="grid sm:grid-cols-2 gap-3">
+          <InfoBanner
+            icon={Settings2}
+            title="שתי שכבות"
+            body={
+              <>
+                <strong>אוניברסלי</strong> (חוק): מע"מ, רף הקצאה, ניכוי מעורב, חוק 6 חודשים.
+                {' '}
+                <strong>פר-חברה</strong>: חשבונות, מרכזי עלות, סוג עוסק.
+              </>
+            }
+          />
+          <InfoBanner
+            icon={FileCode2}
+            title="פורמט ייצוא MOVEIN"
+            body={
+              <>
+                <strong>180</strong> סטנדרטי (CP1255), <strong>FLEXIBLE</strong> אוטומטי כשנדרש מרכז עלות, הקצאה ארוכה, או יותר מ-4 שורות.
+              </>
+            }
+          />
+        </section>
+      )}
 
       {/* Rules grouped by category */}
       {filtered.length === 0 ? (
@@ -157,50 +389,45 @@ export default function AccountingRulesPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          {groupByCategory(filtered).map(([category, rules]) => (
-            <section key={category}>
-              <h2 className="text-xs font-bold uppercase tracking-wider text-ink-700 mb-2 px-1 flex items-center gap-2">
-                {CATEGORY_LABELS[category]}
-                <span className="text-[10px] font-medium text-ink-400 tabular-nums">
-                  {rules.length}
-                </span>
-              </h2>
-              <div className="bg-white border border-ink-200 rounded-xl overflow-hidden">
-                <ul className="divide-y divide-ink-100">
-                  {rules.map((rule) => (
-                    <RuleRow
-                      key={rule.code}
-                      rule={rule}
-                      isOpen={openCode === rule.code}
-                      onToggle={() =>
-                        setOpenCode((prev) => (prev === rule.code ? null : rule.code))
-                      }
-                    />
-                  ))}
-                </ul>
-              </div>
-            </section>
-          ))}
+          {groupByCategory(filtered).map(([category, rules]) => {
+            const meta = CATEGORY_META[category];
+            return (
+              <section key={category}>
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <h2 className="text-sm font-bold text-ink-900 flex items-center gap-2">
+                    <span className="text-lg">{meta.emoji}</span>
+                    {meta.label}
+                    <span className="text-[10px] font-medium text-ink-500 tabular-nums bg-ink-100 px-1.5 py-0.5 rounded">
+                      {rules.length}
+                    </span>
+                  </h2>
+                </div>
+                <div className="bg-white border border-ink-200 rounded-xl overflow-hidden">
+                  <ul className="divide-y divide-ink-100">
+                    {rules.map((rule) => (
+                      <RuleRow
+                        key={rule.code}
+                        rule={rule}
+                        isOpen={openCode === rule.code}
+                        onToggle={() =>
+                          setOpenCode((prev) => (prev === rule.code ? null : rule.code))
+                        }
+                      />
+                    ))}
+                  </ul>
+                </div>
+              </section>
+            );
+          })}
         </div>
       )}
 
-      <div className="text-xs text-ink-400 text-center mt-6">
+      <div className="text-xs text-ink-400 text-center mt-6 pb-8">
         מציג {filtered.length} מתוך {RULES.length} חוקים
       </div>
     </div>
   );
 }
-
-const CATEGORY_ORDER: RuleCategory[] = [
-  'supplier',
-  'customer',
-  'bank',
-  'payroll',
-  'assets',
-  'inventory',
-  'period',
-  'year-end',
-];
 
 function groupByCategory(
   rules: AccountingRule[],
@@ -217,6 +444,37 @@ function groupByCategory(
 }
 
 /* ---------------- toolbar ---------------- */
+
+function HeroStat({
+  icon: Icon,
+  label,
+  value,
+  hint,
+  accent,
+}: {
+  icon: typeof Target;
+  label: string;
+  value: string;
+  hint: string;
+  accent?: 'emerald' | 'amber';
+}) {
+  const accentRing =
+    accent === 'emerald'
+      ? 'ring-emerald-300/40'
+      : accent === 'amber'
+        ? 'ring-amber-300/40'
+        : 'ring-white/20';
+  return (
+    <div className={`bg-white/10 backdrop-blur border border-white/20 rounded-xl p-3 ring-1 ${accentRing}`}>
+      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-white/70 mb-2">
+        <Icon size={11} />
+        {label}
+      </div>
+      <div className="text-2xl font-bold tabular-nums leading-none">{value}</div>
+      <div className="text-[10px] text-white/70 mt-1">{hint}</div>
+    </div>
+  );
+}
 
 function FilterChip({
   active,
@@ -302,7 +560,9 @@ function RuleRow({
       <button
         type="button"
         onClick={onToggle}
-        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-ink-50/60 transition text-right"
+        className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-ink-50/60 transition text-right ${
+          isOpen ? 'bg-accent-50/40' : ''
+        }`}
       >
         {/* Status accent bar */}
         <div className={`w-1 self-stretch rounded ${tone.barBg}`} />
@@ -405,7 +665,7 @@ function RuleDetail({ rule }: { rule: AccountingRule }) {
 
         {/* Right column: example */}
         <div>
-          <DetailBlock icon={BookOpen} title="דוגמה מספרית" tone="accent">
+          <DetailBlock icon={Brain} title="דוגמה מספרית" tone="accent">
             <Example example={rule.example} />
           </DetailBlock>
         </div>
