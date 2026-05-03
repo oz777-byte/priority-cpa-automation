@@ -1,5 +1,5 @@
 import type { ValidationContext } from '@priority-cpa/je-validator';
-import type { ConstructorConfig } from '@priority-cpa/je-constructor';
+import type { ConstructorConfig, ARConstructorConfig } from '@priority-cpa/je-constructor';
 import type { CanonicalInvoice } from '@priority-cpa/invoice-schema';
 import type { MoveInConfig } from '@priority-cpa/movein-generator';
 
@@ -24,6 +24,16 @@ export interface CompanySettings {
   /* ---- special accounts ---- */
   withholding_account?: string;        // tax authority A/P, e.g. 175-0
   non_deductible_account?: string;     // for MIXED_DEDUCTION, e.g. 502-1
+
+  /* ---- AR (sales) accounts ---- */
+  revenue_account?: string;            // 700-0
+  services_revenue_account?: string;   // 710-0
+  output_vat_account?: string;         // 220-0
+  card_clearing_account?: string;      // 125-0
+  postdated_checks_account?: string;   // 122-0
+  advances_account?: string;           // 230-1 (advance payments from customers)
+  bad_debt_account?: string;           // 530-0
+  customer_withholding_account?: string; // 175-1 (B2G withholding refundable)
 }
 
 export const DEFAULT_SETTINGS = {
@@ -85,6 +95,29 @@ export function constructorConfigFor(
     ...(settings.non_deductible_account
       ? { nonDeductibleAccount: settings.non_deductible_account }
       : {}),
+  };
+}
+
+/**
+ * Build the AR (sales) constructor config from a company's settings.
+ * Defaults align with the seeded baseline COA from migration 0009.
+ */
+export function arConstructorConfigFor(settings: CompanySettings): ARConstructorConfig {
+  return {
+    revenueAccount: settings.revenue_account ?? '700-0',
+    ...(settings.services_revenue_account
+      ? { servicesRevenueAccount: settings.services_revenue_account }
+      : {}),
+    outputVatAccount: settings.output_vat_account ?? '220-0',
+    cashAccount: settings.payment_account_cash ?? '100-0',
+    bankAccount: settings.payment_account_bank ?? '121-0',
+    cardClearingAccount: settings.card_clearing_account ?? '125-0',
+    postdatedChecksAccount: settings.postdated_checks_account ?? '122-0',
+    advancesAccount: settings.advances_account ?? '230-1',
+    badDebtAccount: settings.bad_debt_account ?? '530-0',
+    customerWithholdingAccount: settings.customer_withholding_account ?? '175-1',
+    transactionType: settings.transaction_type ?? DEFAULT_SETTINGS.transaction_type,
+    detailsPrefix: 'מכירה',
   };
 }
 

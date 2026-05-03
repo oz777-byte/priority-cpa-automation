@@ -3,11 +3,17 @@
 import { SupabaseAuditStore } from '@priority-cpa/audit-logger';
 import {
   CanonicalInvoiceSchema,
+  SalesInvoiceSchema,
   type CanonicalInvoice,
+  type SalesInvoice,
 } from '@priority-cpa/invoice-schema';
-import { constructJE } from '@priority-cpa/je-constructor';
+import { constructJE, constructARJE } from '@priority-cpa/je-constructor';
 import { getAdminClient } from '@/lib/supabase/admin';
-import { type CompanySettings, constructorConfigFor } from '@/lib/company-config';
+import {
+  type CompanySettings,
+  constructorConfigFor,
+  arConstructorConfigFor,
+} from '@/lib/company-config';
 
 /**
  * Backfill: ensure every queued/classified invoice in `companyId` has a
@@ -231,5 +237,95 @@ export async function ensureDraftJEsForCompany(
       .update({ status: 'classified' })
       .eq('id', inv.id);
   }
+
+  // Now do the same for AR (sales) invoices.
+  const arConfig = arConstructorConfigFor(settings);
+  const { data: salesOrphans } = await admin
+    .from('sales_invoices')
+    .select('id, canonical')
+    .eq('company_id', companyId)
+    .eq('status', 'queued');
+
+  for (const inv of salesOrphans ?? []) {
+    const { data: existing } = await admin
+      .from('journal_entries')
+      .select('id')
+      .eq('sales_invoice_id', inv.id)
+      .maybeSingle();
+    if (existing) continue;
+
+    const parsed = SalesInvoiceSchema.safeParse(inv.canonical);
+    if (!parsed.success) continue;
+    const sales: SalesInvoice = parsed.data;
+
+    const result = constructARJE(sales, arConfig);
+
+    for (const record of result.records) {
+      const { data: jeRow, error: jeErr } = await admin
+        .from('journal_entries')
+        .insert({
+          company_id: companyId,
+          sales_invoice_id: inv.id,
+          scenario: record.scenario,
+          movein_format: '180',
+          status: 'draft',
+          transaction_type: record.transactionType,
+          reference1: record.reference1,
+          ...(record.reference2 ? { reference2: record.reference2 } : {}),
+          document_date: record.documentDate,
+          value_date: record.valueDate,
+          currency: record.currency,
+          ...(sales.invoice.fx_rate ? { fx_rate: sales.invoice.fx_rate } : {}),
+          details: record.details,
+          created_by: userId,
+          ...(result.warnings.length > 0
+            ? {
+                validation_results: {
+                  constructor_warnings: result.warnings,
+                  notes: record.notes,
+                  side: 'ar',
+                },
+              }
+            : { validation_results: { side: 'ar', notes: record.notes } }),
+        })
+        .select('id')
+        .single();
+      if (jeErr || !jeRow) continue;
+
+      const linesPayload = record.lines.map((l, i) => ({
+        je_id: jeRow.id,
+        line_no: i + 1,
+        account: l.account,
+        debit: l.debit,
+        credit: l.credit,
+        ...(l.debitFx ? { debit_fx: l.debitFx } : {}),
+        ...(l.creditFx ? { credit_fx: l.creditFx } : {}),
+        ...(l.details ? { details: l.details } : {}),
+      }));
+      await admin.from('journal_entry_lines').insert(linesPayload);
+
+      await audit.log({
+        companyId,
+        userId,
+        action: 'je.create',
+        entityType: 'journal_entry',
+        entityId: jeRow.id as string,
+        payload: {
+          sales_invoice_id: inv.id,
+          scenario: record.scenario,
+          side: 'ar',
+          auto_drafted: true,
+          warnings: result.warnings,
+        },
+      });
+      created++;
+    }
+
+    await admin
+      .from('sales_invoices')
+      .update({ status: 'approved' })
+      .eq('id', inv.id);
+  }
+
   return { created };
 }
