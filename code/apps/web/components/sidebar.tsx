@@ -59,6 +59,7 @@ const COMPANY_TABS: Tab[] = [
   { slug: '/accounts', label: 'תרשים חשבונות', icon: ListTree },
   { slug: '/account-mapping', label: 'מיפוי חשבונות', icon: GitBranch },
   { slug: '/periods', label: 'תקופות חשבונאיות', icon: Calendar },
+  { slug: '/pcn874', label: 'דיווח PCN874', icon: FileText },
   { slug: '/exports', label: 'היסטוריית ייצוא', icon: History },
   { slug: '/reports', label: 'דוחות', icon: BarChart3 },
   { slug: '/settings', label: 'הגדרות חברה', icon: Settings },
