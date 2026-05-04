@@ -4,31 +4,30 @@ import { useState, useTransition } from 'react';
 import {
   CheckCircle2,
   AlertCircle,
-  Plus,
   Trash2,
-  ExternalLink,
   Loader2,
   Lock,
 } from 'lucide-react';
 import {
   updateJEHeaderAction,
   updateLineAction,
-  addLineAction,
   removeLineAction,
 } from './actions';
 
 /**
- * Priority-style JE editor.
+ * Priority-style flat journal entries table.
  *
- * Visual conventions taken from Priority ERP's "תנועות יומן" form:
- *   - Header section at top with field grid (סוג תנועה, אסמכתא 1/2,
- *     תאריך אסמכתא, תאריך ערך, מטבע, פרטים)
- *   - Lines table below with columns:
- *     # · חשבון · שם חשבון · חובה · זכות · חובה מט"ח · זכות מט"ח · מרכז עלות · פרטים
- *   - Bottom totals row: סה"כ חובה / סה"כ זכות / מאזן indicator
- *   - JE number shown as "T-{number}" while draft, plain "{number}" when final
- *   - Light grey-on-white aesthetic with thin borders, sources from Priority
- *     release-notes screenshots and forum descriptions.
+ * Convention from Priority's "תנועות יומן" form:
+ *   - One row per LINE (not per JE)
+ *   - All fields visible per row including JE-level headers
+ *     (סוג תנועה, אסמכתא 1/2, תאריכים, פרטים) — denormalized for display
+ *   - User scrolls HORIZONTALLY to see all columns (no responsive collapse)
+ *   - Lines belonging to the same JE are visually grouped (alternating
+ *     row backgrounds), with JE-level fields editable only on the first line
+ *   - Balance status shown per JE (red row when unbalanced)
+ *   - Sticky # column on the right for orientation while scrolling
+ *
+ * Sources: Priority release notes 19.1, erpil.co.il wizards, h-erp MOVEIN spec.
  */
 
 interface JE {
@@ -64,6 +63,17 @@ interface JEWithLines {
   lines: Line[];
 }
 
+interface FlatRow {
+  je: JE;
+  line: Line;
+  isFirstLineOfJE: boolean;
+  isLastLineOfJE: boolean;
+  drSum: number;
+  crSum: number;
+  balanced: boolean;
+  jeRowIndex: number;
+}
+
 export function JEEditorPanel({
   jes,
   accountNames,
@@ -71,135 +81,166 @@ export function JEEditorPanel({
   jes: JEWithLines[];
   accountNames: Record<string, string>;
 }) {
-  return (
-    <div className="space-y-3">
-      {jes.map((item) => (
-        <JECard
-          key={item.je.id}
-          je={item.je}
-          lines={item.lines}
-          accountNames={accountNames}
-        />
-      ))}
-    </div>
-  );
-}
+  // Flatten — one row per line. Pre-compute per-JE sums + first/last indicators.
+  const rows: FlatRow[] = [];
+  jes.forEach(({ je, lines }, jeIndex) => {
+    const drSum = lines.reduce((s, l) => s + Number(l.debit), 0);
+    const crSum = lines.reduce((s, l) => s + Number(l.credit), 0);
+    const balanced = Math.abs(drSum - crSum) <= 0.05;
+    lines.forEach((line, i) => {
+      rows.push({
+        je,
+        line,
+        isFirstLineOfJE: i === 0,
+        isLastLineOfJE: i === lines.length - 1,
+        drSum,
+        crSum,
+        balanced,
+        jeRowIndex: jeIndex,
+      });
+    });
+  });
 
-/* =================== card =================== */
+  if (rows.length === 0) {
+    return (
+      <div className="bg-white border border-ink-300 p-8 text-center text-sm text-ink-500">
+        אין פקודות יומן בתצוגה זו.
+      </div>
+    );
+  }
 
-function JECard({
-  je,
-  lines,
-  accountNames,
-}: {
-  je: JE;
-  lines: Line[];
-  accountNames: Record<string, string>;
-}) {
-  const drSum = lines.reduce((s, l) => s + Number(l.debit), 0);
-  const crSum = lines.reduce((s, l) => s + Number(l.credit), 0);
-  const drFxSum = lines.reduce((s, l) => s + Number(l.debit_fx), 0);
-  const crFxSum = lines.reduce((s, l) => s + Number(l.credit_fx), 0);
-  const balanced = Math.abs(drSum - crSum) <= 0.05;
-  const isExported = je.status === 'exported';
-  const isFx = je.currency !== 'ILS';
-  const hasCostCenters = lines.some((l) => l.cost_center && l.cost_center.length > 0);
+  const hasFx = rows.some((r) => r.je.currency !== 'ILS');
 
   return (
-    <article className="bg-white border border-ink-300 shadow-sm overflow-hidden">
-      <CardHeader je={je} balanced={balanced} isExported={isExported} />
-      <HeaderFields je={je} disabled={isExported} />
-      <LinesTable
-        je={je}
-        lines={lines}
-        drSum={drSum}
-        crSum={crSum}
-        drFxSum={drFxSum}
-        crFxSum={crFxSum}
-        balanced={balanced}
-        disabled={isExported}
-        accountNames={accountNames}
-        showFx={isFx}
-        showCostCenter={hasCostCenters || !isExported}
-      />
-    </article>
-  );
-}
+    <div className="border border-ink-300 bg-white shadow-sm">
+      {/* Top bar with summary */}
+      <div className="px-3 py-2 bg-gradient-to-l from-ink-100 to-ink-50 border-b border-ink-300 flex items-center justify-between text-xs">
+        <div className="flex items-center gap-3">
+          <span className="font-semibold text-ink-800">תנועות יומן</span>
+          <span className="text-ink-500">·</span>
+          <span className="text-ink-600">{jes.length} פקודות</span>
+          <span className="text-ink-500">·</span>
+          <span className="text-ink-600">{rows.length} שורות</span>
+        </div>
+        <div className="text-[10px] text-ink-500">
+          ↔ ניתן לגלול אופקית לראות את כל העמודות
+        </div>
+      </div>
 
-function CardHeader({
-  je,
-  balanced,
-  isExported,
-}: {
-  je: JE;
-  balanced: boolean;
-  isExported: boolean;
-}) {
-  // Priority displays JE number with "T" prefix when temporary (draft).
-  const numberDisplay = je.je_number != null
-    ? isExported
-      ? `${je.je_number}`
-      : `T-${je.je_number}`
-    : '—';
+      <div className="overflow-x-auto" dir="rtl">
+        <table className="text-xs border-collapse" style={{ minWidth: '1800px' }}>
+          <thead>
+            <tr className="bg-ink-100 border-b-2 border-ink-300 text-[10px] uppercase tracking-wider text-ink-700 font-semibold">
+              <Th width="50px" sticky>#</Th>
+              <Th width="80px">מס׳ תנועה</Th>
+              <Th width="60px">סוג</Th>
+              <Th width="110px">אסמכתא 1</Th>
+              <Th width="100px">אסמכתא 2</Th>
+              <Th width="100px">ת. אסמכתא</Th>
+              <Th width="100px">ת. ערך</Th>
+              <Th width="90px">חשבון</Th>
+              <Th width="180px">שם חשבון</Th>
+              <Th width="110px" align="left">חובה</Th>
+              <Th width="110px" align="left">זכות</Th>
+              {hasFx && (
+                <>
+                  <Th width="100px" align="left">חובה מט&quot;ח</Th>
+                  <Th width="100px" align="left">זכות מט&quot;ח</Th>
+                  <Th width="60px">מטבע</Th>
+                </>
+              )}
+              <Th width="110px">מרכז עלות</Th>
+              <Th width="180px">פרטים (כותרת)</Th>
+              <Th width="180px">פרטי שורה</Th>
+              <Th width="110px">סטטוס</Th>
+              <Th width="80px">תרחיש</Th>
+              <Th width="40px">{' '}</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <FlatLineRow
+                key={row.line.id}
+                row={row}
+                accountNames={accountNames}
+                showFx={hasFx}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-  return (
-    <div className="flex items-center justify-between px-4 py-2 bg-gradient-to-l from-ink-100 to-ink-50 border-b border-ink-300">
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] uppercase tracking-wider text-ink-500 font-semibold">
-            פקודת יומן
+      {/* Bottom summary */}
+      <div className="px-3 py-2 bg-ink-50 border-t-2 border-ink-300 flex items-center justify-between text-xs">
+        <div className="flex items-center gap-4">
+          <span className="text-ink-700 font-semibold">סיכום:</span>
+          <span className="text-ink-600">
+            סה״כ חובה{' '}
+            <span dir="ltr" className="tabular-nums font-semibold text-ink-900">
+              {rows.reduce((s, r) => s + Number(r.line.debit), 0).toFixed(2)}
+            </span>
           </span>
-          <span
-            className={`text-sm font-mono font-bold tabular-nums ${
-              isExported ? 'text-ink-900' : 'text-amber-700'
-            }`}
-            dir="ltr"
-            title={isExported ? 'מספר סופי' : 'מספר זמני (טרם יוצא)'}
-          >
-            {numberDisplay}
+          <span className="text-ink-600">
+            סה״כ זכות{' '}
+            <span dir="ltr" className="tabular-nums font-semibold text-ink-900">
+              {rows.reduce((s, r) => s + Number(r.line.credit), 0).toFixed(2)}
+            </span>
           </span>
         </div>
-        {je.scenario && (
-          <>
-            <span className="text-ink-300">|</span>
-            <code
-              className="text-[10px] font-mono px-1.5 py-0.5 bg-white border border-ink-200 text-ink-700 rounded"
-              dir="ltr"
-            >
-              {je.scenario}
-            </code>
-          </>
-        )}
-      </div>
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <BalanceIndicator balanced={balanced} />
-        <StatusBadge status={je.status} />
-        {isExported && (
-          <Lock size={12} className="text-purple-600" aria-label="נעול — יוצא" />
-        )}
-        {je.invoice_id && (
-          <a
-            href={`/dashboard/c/${''}#invoice-${je.invoice_id}`}
-            className="p-1 text-ink-500 hover:text-accent-600 hover:bg-white rounded"
-            title="פתח חשבונית מקור"
-          >
-            <ExternalLink size={12} />
-          </a>
-        )}
+        <div>
+          {jes.every((j) => {
+            const dr = j.lines.reduce((s, l) => s + Number(l.debit), 0);
+            const cr = j.lines.reduce((s, l) => s + Number(l.credit), 0);
+            return Math.abs(dr - cr) <= 0.05;
+          }) ? (
+            <span className="inline-flex items-center gap-1 text-emerald-700 font-medium">
+              <CheckCircle2 size={11} />
+              כל הפקודות מאוזנות
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-red-700 font-medium">
+              <AlertCircle size={11} />
+              {jes.filter((j) => {
+                const dr = j.lines.reduce((s, l) => s + Number(l.debit), 0);
+                const cr = j.lines.reduce((s, l) => s + Number(l.credit), 0);
+                return Math.abs(dr - cr) > 0.05;
+              }).length}{' '}
+              פקודות לא מאוזנות
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-/* =================== header fields =================== */
+/* =================== one-line row =================== */
 
-function HeaderFields({ je, disabled }: { je: JE; disabled: boolean }) {
+function FlatLineRow({
+  row,
+  accountNames,
+  showFx,
+}: {
+  row: FlatRow;
+  accountNames: Record<string, string>;
+  showFx: boolean;
+}) {
+  const { je, line, isFirstLineOfJE, isLastLineOfJE, balanced, jeRowIndex } = row;
+  const isExported = je.status === 'exported';
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [accountValue, setAccountValue] = useState(line.account);
 
-  function commit(field: string, value: string) {
-    if (disabled) return;
+  // JE-grouping background — alternate per JE for visual scanning.
+  const groupBg = jeRowIndex % 2 === 0 ? 'bg-white' : 'bg-ink-50/40';
+  const unbalancedBg = !balanced ? 'bg-red-50/60' : groupBg;
+  const borderTop = isFirstLineOfJE ? 'border-t-2 border-t-ink-300' : '';
+  const borderBottom = isLastLineOfJE
+    ? 'border-b border-b-ink-200'
+    : 'border-b border-b-ink-100';
+
+  function commitHeader(field: string, value: string) {
+    if (isExported) return;
     setError(null);
     const fd = new FormData();
     fd.set('jeId', je.id);
@@ -213,248 +254,15 @@ function HeaderFields({ je, disabled }: { je: JE; disabled: boolean }) {
     fd.set('details', field === 'details' ? value : je.details);
     startTransition(async () => {
       const r = await updateJEHeaderAction(fd);
-      if (!r.ok) {
-        setError(r.error ?? 'שמירה נכשלה');
-        return;
-      }
-      setSavedAt(Date.now());
+      if (!r.ok) setError(r.error ?? 'שגיאה');
     });
   }
 
-  return (
-    <div className="px-4 py-3 bg-ink-50/50 border-b border-ink-200">
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-x-3 gap-y-2">
-        <PriorityField
-          label="סוג תנועה"
-          name="transactionType"
-          defaultValue={je.transaction_type}
-          maxLength={3}
-          disabled={disabled}
-          align="center"
-          onCommit={(v) => commit('transactionType', v)}
-        />
-        <PriorityField
-          label="אסמכתא 1"
-          name="reference1"
-          defaultValue={je.reference1}
-          dir="ltr"
-          monospace
-          disabled={disabled}
-          onCommit={(v) => commit('reference1', v)}
-        />
-        <PriorityField
-          label="אסמכתא 2"
-          name="reference2"
-          defaultValue={je.reference2 ?? ''}
-          dir="ltr"
-          monospace
-          disabled={disabled}
-          placeholder="—"
-          onCommit={(v) => commit('reference2', v)}
-        />
-        <PriorityField
-          label="תאריך אסמכתא"
-          name="documentDate"
-          defaultValue={je.document_date}
-          type="date"
-          dir="ltr"
-          disabled={disabled}
-          onCommit={(v) => commit('documentDate', v)}
-        />
-        <PriorityField
-          label="תאריך ערך"
-          name="valueDate"
-          defaultValue={je.value_date}
-          type="date"
-          dir="ltr"
-          disabled={disabled}
-          onCommit={(v) => commit('valueDate', v)}
-        />
-        <PriorityField
-          label="מטבע"
-          name="currency"
-          defaultValue={je.currency}
-          dir="ltr"
-          monospace
-          disabled
-          align="center"
-          onCommit={() => {
-            /* currency edits not supported via this header action */
-          }}
-        />
-      </div>
-      <div className="grid grid-cols-1 mt-2">
-        <PriorityField
-          label="פרטים"
-          name="details"
-          defaultValue={je.details}
-          maxLength={60}
-          disabled={disabled}
-          onCommit={(v) => commit('details', v)}
-        />
-      </div>
-      <SaveStatus pending={pending} error={error} savedAt={savedAt} />
-    </div>
-  );
-}
-
-/* =================== lines table =================== */
-
-function LinesTable({
-  je,
-  lines,
-  drSum,
-  crSum,
-  drFxSum,
-  crFxSum,
-  balanced,
-  disabled,
-  accountNames,
-  showFx,
-  showCostCenter,
-}: {
-  je: JE;
-  lines: Line[];
-  drSum: number;
-  crSum: number;
-  drFxSum: number;
-  crFxSum: number;
-  balanced: boolean;
-  disabled: boolean;
-  accountNames: Record<string, string>;
-  showFx: boolean;
-  showCostCenter: boolean;
-}) {
-  const colCount =
-    7 + (showFx ? 2 : 0) + (showCostCenter ? 1 : 0) + (disabled ? 0 : 1);
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="bg-ink-100/70">
-          <tr className="border-b-2 border-ink-300 text-[10px] uppercase tracking-wider text-ink-700 font-semibold">
-            <Th width="w-10" align="center">
-              #
-            </Th>
-            <Th width="w-28" align="right">
-              חשבון
-            </Th>
-            <Th align="right">שם חשבון</Th>
-            <Th width="w-28" align="left">
-              חובה
-            </Th>
-            <Th width="w-28" align="left">
-              זכות
-            </Th>
-            {showFx && (
-              <>
-                <Th width="w-24" align="left">
-                  חובה מט&quot;ח
-                </Th>
-                <Th width="w-24" align="left">
-                  זכות מט&quot;ח
-                </Th>
-              </>
-            )}
-            {showCostCenter && (
-              <Th width="w-28" align="right">
-                מרכז עלות
-              </Th>
-            )}
-            <Th align="right">פרטי שורה</Th>
-            {!disabled && <Th width="w-10" align="center">{' '}</Th>}
-          </tr>
-        </thead>
-        <tbody>
-          {lines.map((line) => (
-            <LineRow
-              key={line.id}
-              line={line}
-              disabled={disabled}
-              accountNames={accountNames}
-              showFx={showFx}
-              showCostCenter={showCostCenter}
-            />
-          ))}
-          {!disabled && <AddLineRow jeId={je.id} colSpan={colCount - 1} />}
-        </tbody>
-        <tfoot>
-          <tr className="border-t-2 border-ink-300 bg-ink-50">
-            <td colSpan={3} className="px-3 py-2 text-xs text-ink-700 font-bold uppercase tracking-wider text-right">
-              סה&quot;כ
-            </td>
-            <td className="px-3 py-2 text-left tabular-nums font-bold text-ink-900" dir="ltr">
-              {drSum.toFixed(2)}
-            </td>
-            <td className="px-3 py-2 text-left tabular-nums font-bold text-ink-900" dir="ltr">
-              {crSum.toFixed(2)}
-            </td>
-            {showFx && (
-              <>
-                <td className="px-3 py-2 text-left tabular-nums font-bold text-ink-900" dir="ltr">
-                  {drFxSum.toFixed(2)}
-                </td>
-                <td className="px-3 py-2 text-left tabular-nums font-bold text-ink-900" dir="ltr">
-                  {crFxSum.toFixed(2)}
-                </td>
-              </>
-            )}
-            {showCostCenter && <td className="px-3 py-2"></td>}
-            <td className="px-3 py-2 text-right" colSpan={disabled ? 1 : 2}>
-              {balanced ? (
-                <span className="inline-flex items-center gap-1 text-xs text-emerald-700 font-medium">
-                  <CheckCircle2 size={12} />
-                  מאוזן
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 text-xs text-red-700 font-medium">
-                  <AlertCircle size={12} />
-                  הפרש <span dir="ltr" className="tabular-nums">{(drSum - crSum).toFixed(2)}</span>
-                </span>
-              )}
-            </td>
-          </tr>
-        </tfoot>
-      </table>
-    </div>
-  );
-}
-
-function Th({
-  width,
-  align,
-  children,
-}: {
-  width?: string;
-  align: 'right' | 'left' | 'center';
-  children: React.ReactNode;
-}) {
-  const alignClass =
-    align === 'left' ? 'text-left' : align === 'center' ? 'text-center' : 'text-right';
-  return (
-    <th className={`${width ?? ''} px-3 py-2 ${alignClass}`}>{children}</th>
-  );
-}
-
-function LineRow({
-  line,
-  disabled,
-  accountNames,
-  showFx,
-  showCostCenter,
-}: {
-  line: Line;
-  disabled: boolean;
-  accountNames: Record<string, string>;
-  showFx: boolean;
-  showCostCenter: boolean;
-}) {
-  const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  const [accountValue, setAccountValue] = useState(line.account);
-
-  function commit(field: 'account' | 'debit' | 'credit' | 'details', value: string) {
-    if (disabled) return;
+  function commitLine(
+    field: 'account' | 'debit' | 'credit' | 'details',
+    value: string,
+  ) {
+    if (isExported) return;
     setError(null);
     const fd = new FormData();
     fd.set('lineId', line.id);
@@ -476,236 +284,290 @@ function LineRow({
     });
   }
 
+  const numberDisplay =
+    je.je_number != null
+      ? isExported
+        ? String(je.je_number)
+        : `T-${je.je_number}`
+      : '—';
+
   return (
-    <tr className="border-b border-ink-100 last:border-0 hover:bg-amber-50/30 group">
-      <td className="px-3 py-1.5 text-xs text-ink-500 tabular-nums text-center">
+    <tr className={`${unbalancedBg} ${borderTop} ${borderBottom} hover:bg-amber-50/40 group`}>
+      <Td sticky align="center" className="text-ink-500 tabular-nums">
         {line.line_no}
-      </td>
-      <td className="px-2 py-1">
+      </Td>
+
+      <Td align="center" className="font-mono tabular-nums">
+        {isFirstLineOfJE ? (
+          <span
+            className={`text-xs ${isExported ? 'text-ink-900 font-bold' : 'text-amber-700 font-semibold'}`}
+            dir="ltr"
+            title={isExported ? 'מספר סופי' : 'מספר זמני'}
+          >
+            {numberDisplay}
+          </span>
+        ) : (
+          <span className="text-ink-300">·</span>
+        )}
+      </Td>
+
+      <Td>
+        {isFirstLineOfJE ? (
+          <CellInput
+            defaultValue={je.transaction_type}
+            disabled={isExported}
+            onCommit={(v) => commitHeader('transactionType', v)}
+            align="center"
+            maxLength={3}
+          />
+        ) : (
+          <span className="text-ink-300 text-xs px-2">·</span>
+        )}
+      </Td>
+      <Td>
+        {isFirstLineOfJE ? (
+          <CellInput
+            defaultValue={je.reference1}
+            dir="ltr"
+            monospace
+            disabled={isExported}
+            onCommit={(v) => commitHeader('reference1', v)}
+          />
+        ) : (
+          <span className="text-ink-300 text-xs px-2">·</span>
+        )}
+      </Td>
+      <Td>
+        {isFirstLineOfJE ? (
+          <CellInput
+            defaultValue={je.reference2 ?? ''}
+            dir="ltr"
+            monospace
+            disabled={isExported}
+            onCommit={(v) => commitHeader('reference2', v)}
+            placeholder="—"
+          />
+        ) : (
+          <span className="text-ink-300 text-xs px-2">·</span>
+        )}
+      </Td>
+      <Td>
+        {isFirstLineOfJE ? (
+          <CellInput
+            defaultValue={je.document_date}
+            type="date"
+            dir="ltr"
+            disabled={isExported}
+            onCommit={(v) => commitHeader('documentDate', v)}
+          />
+        ) : (
+          <span className="text-ink-300 text-xs px-2">·</span>
+        )}
+      </Td>
+      <Td>
+        {isFirstLineOfJE ? (
+          <CellInput
+            defaultValue={je.value_date}
+            type="date"
+            dir="ltr"
+            disabled={isExported}
+            onCommit={(v) => commitHeader('valueDate', v)}
+          />
+        ) : (
+          <span className="text-ink-300 text-xs px-2">·</span>
+        )}
+      </Td>
+
+      <Td>
         <CellInput
           defaultValue={line.account}
           onValueChange={setAccountValue}
           dir="ltr"
           monospace
-          disabled={disabled}
-          onCommit={(v) => commit('account', v)}
+          disabled={isExported}
+          onCommit={(v) => commitLine('account', v)}
           maxLength={15}
         />
-      </td>
-      <td className="px-2 py-1.5 text-xs text-ink-700">
-        <span title={accountValue}>{accountNames[accountValue] ?? '—'}</span>
-      </td>
-      <td className="px-2 py-1">
+      </Td>
+
+      <Td className="text-ink-700">
+        <span title={accountValue} className="truncate block">
+          {accountNames[accountValue] ?? '—'}
+        </span>
+      </Td>
+
+      <Td align="left" className="tabular-nums" dir="ltr">
         <CellInput
           defaultValue={line.debit > 0 ? String(line.debit) : ''}
           dir="ltr"
           inputMode="decimal"
           align="left"
-          disabled={disabled}
-          onCommit={(v) => commit('debit', v || '0')}
+          disabled={isExported}
+          onCommit={(v) => commitLine('debit', v || '0')}
           placeholder="—"
         />
-      </td>
-      <td className="px-2 py-1">
+      </Td>
+
+      <Td align="left" className="tabular-nums" dir="ltr">
         <CellInput
           defaultValue={line.credit > 0 ? String(line.credit) : ''}
           dir="ltr"
           inputMode="decimal"
           align="left"
-          disabled={disabled}
-          onCommit={(v) => commit('credit', v || '0')}
+          disabled={isExported}
+          onCommit={(v) => commitLine('credit', v || '0')}
           placeholder="—"
         />
-      </td>
+      </Td>
+
       {showFx && (
         <>
-          <td className="px-2 py-1.5 text-left tabular-nums text-xs text-ink-700" dir="ltr">
+          <Td align="left" className="tabular-nums text-ink-700" dir="ltr">
             {line.debit_fx > 0 ? line.debit_fx.toFixed(2) : '—'}
-          </td>
-          <td className="px-2 py-1.5 text-left tabular-nums text-xs text-ink-700" dir="ltr">
+          </Td>
+          <Td align="left" className="tabular-nums text-ink-700" dir="ltr">
             {line.credit_fx > 0 ? line.credit_fx.toFixed(2) : '—'}
-          </td>
+          </Td>
+          <Td align="center" className="font-mono text-ink-700" dir="ltr">
+            {isFirstLineOfJE ? (
+              je.currency
+            ) : (
+              <span className="text-ink-300">·</span>
+            )}
+          </Td>
         </>
       )}
-      {showCostCenter && (
-        <td className="px-2 py-1.5 text-xs text-ink-700 font-mono" dir="ltr">
-          {line.cost_center || '—'}
-        </td>
-      )}
-      <td className="px-2 py-1">
+
+      <Td className="font-mono text-ink-700" dir="ltr">
+        {line.cost_center || '—'}
+      </Td>
+
+      <Td>
+        {isFirstLineOfJE ? (
+          <CellInput
+            defaultValue={je.details}
+            disabled={isExported}
+            onCommit={(v) => commitHeader('details', v)}
+            placeholder="—"
+            maxLength={60}
+          />
+        ) : (
+          <span className="text-ink-300 text-xs px-2">·</span>
+        )}
+      </Td>
+
+      <Td>
         <CellInput
           defaultValue={line.details ?? ''}
-          disabled={disabled}
-          onCommit={(v) => commit('details', v)}
+          disabled={isExported}
+          onCommit={(v) => commitLine('details', v)}
           placeholder="—"
         />
-      </td>
-      {!disabled && (
-        <td className="px-2 py-1 text-center">
-          {pending ? (
-            <Loader2 size={11} className="animate-spin text-ink-400 mx-auto" />
-          ) : (
-            <button
-              onClick={remove}
-              className="text-ink-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition"
-              title="מחק שורה"
-              type="button"
-            >
-              <Trash2 size={12} />
-            </button>
-          )}
-          {error && <div className="text-[10px] text-red-700 mt-0.5">{error}</div>}
-        </td>
-      )}
-    </tr>
-  );
-}
+      </Td>
 
-function AddLineRow({ jeId, colSpan }: { jeId: string; colSpan: number }) {
-  const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
+      <Td align="center">
+        {isFirstLineOfJE ? (
+          <StatusBadge status={je.status} />
+        ) : (
+          <span className="text-ink-300">·</span>
+        )}
+      </Td>
 
-  function add(formData: FormData) {
-    setError(null);
-    formData.set('jeId', jeId);
-    startTransition(async () => {
-      const r = await addLineAction(formData);
-      if (!r.ok) {
-        setError(r.error ?? 'שגיאה');
-        return;
-      }
-      setOpen(false);
-    });
-  }
-
-  if (!open) {
-    return (
-      <tr className="border-b border-ink-100 last:border-0">
-        <td colSpan={colSpan + 1} className="px-3 py-1.5">
-          <button
-            onClick={() => setOpen(true)}
-            className="text-xs text-accent-600 hover:text-accent-500 flex items-center gap-1"
-            type="button"
+      <Td align="center" className="font-mono text-[10px]">
+        {isFirstLineOfJE ? (
+          <span
+            dir="ltr"
+            className="px-1.5 py-0.5 bg-white border border-ink-200 text-ink-700 rounded"
           >
-            <Plus size={11} />
-            הוסף שורה
-          </button>
-        </td>
-      </tr>
-    );
-  }
+            {je.scenario ?? '—'}
+          </span>
+        ) : (
+          <span className="text-ink-300">·</span>
+        )}
+      </Td>
 
-  return (
-    <tr className="border-b border-ink-100 last:border-0 bg-amber-50/40">
-      <td className="px-3 py-2 text-xs text-amber-700 font-medium">חדש</td>
-      <td colSpan={colSpan} className="px-2 py-2">
-        <form action={add} className="flex gap-2 items-center flex-wrap">
-          <input
-            name="account"
-            placeholder="חשבון"
-            dir="ltr"
-            required
-            maxLength={15}
-            className="px-2 py-1 border border-ink-300 text-sm font-mono w-32 focus:outline-none focus:ring-1 focus:ring-accent-500 focus:border-accent-500"
-          />
-          <input
-            name="debit"
-            placeholder="חובה"
-            dir="ltr"
-            inputMode="decimal"
-            defaultValue="0"
-            className="px-2 py-1 border border-ink-300 text-sm tabular-nums w-24 text-left focus:outline-none focus:ring-1 focus:ring-accent-500 focus:border-accent-500"
-          />
-          <input
-            name="credit"
-            placeholder="זכות"
-            dir="ltr"
-            inputMode="decimal"
-            defaultValue="0"
-            className="px-2 py-1 border border-ink-300 text-sm tabular-nums w-24 text-left focus:outline-none focus:ring-1 focus:ring-accent-500 focus:border-accent-500"
-          />
-          <input
-            name="details"
-            placeholder="פרטים (אופציונלי)"
-            className="px-2 py-1 border border-ink-300 text-sm flex-1 min-w-[120px] focus:outline-none focus:ring-1 focus:ring-accent-500 focus:border-accent-500"
-          />
-          <button
-            type="submit"
-            disabled={pending}
-            className="px-3 py-1 bg-accent-600 text-white text-sm disabled:opacity-50 hover:bg-accent-500"
-          >
-            {pending ? '...' : 'הוסף'}
-          </button>
+      <Td align="center">
+        {isExported ? (
+          <Lock size={11} className="text-purple-600 mx-auto" aria-label="נעול" />
+        ) : pending ? (
+          <Loader2 size={11} className="animate-spin text-ink-400 mx-auto" />
+        ) : (
           <button
             type="button"
-            onClick={() => setOpen(false)}
-            className="px-2 py-1 text-ink-600 text-sm hover:bg-ink-50"
+            onClick={remove}
+            className="text-ink-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition mx-auto block"
+            title="מחק שורה"
           >
-            ביטול
+            <Trash2 size={12} />
           </button>
-          {error && <span className="text-xs text-red-700">{error}</span>}
-        </form>
-      </td>
+        )}
+        {error && <div className="text-[9px] text-red-700 mt-0.5">{error}</div>}
+      </Td>
     </tr>
   );
 }
 
 /* =================== building blocks =================== */
 
-function PriorityField({
-  label,
-  name,
-  defaultValue,
-  type,
-  dir,
-  monospace,
-  maxLength,
-  disabled,
-  placeholder,
+function Th({
+  width,
   align,
-  onCommit,
+  sticky,
+  children,
 }: {
-  label: string;
-  name: string;
-  defaultValue: string;
-  type?: string;
-  dir?: 'ltr' | 'rtl';
-  monospace?: boolean;
-  maxLength?: number;
-  disabled?: boolean;
-  placeholder?: string;
-  align?: 'center';
-  onCommit: (v: string) => void;
+  width?: string;
+  align?: 'right' | 'left' | 'center';
+  sticky?: boolean;
+  children: React.ReactNode;
 }) {
-  const [value, setValue] = useState(defaultValue);
-  const alignClass = align === 'center' ? 'text-center' : '';
+  const alignClass =
+    align === 'left'
+      ? 'text-left'
+      : align === 'center'
+        ? 'text-center'
+        : 'text-right';
+  const stickyClass = sticky
+    ? 'sticky right-0 bg-ink-100 z-10 border-l border-ink-300'
+    : '';
   return (
-    <div>
-      <label
-        htmlFor={`${name}-${defaultValue}`}
-        className="block text-[10px] text-ink-600 font-medium mb-0.5"
-      >
-        {label}
-      </label>
-      <input
-        id={`${name}-${defaultValue}`}
-        name={name}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onBlur={() => {
-          if (value !== defaultValue) onCommit(value);
-        }}
-        type={type}
-        dir={dir}
-        maxLength={maxLength}
-        disabled={disabled}
-        placeholder={placeholder}
-        className={`w-full px-2 py-1 border border-ink-300 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-accent-500 focus:border-accent-500 disabled:bg-ink-100 disabled:text-ink-600 disabled:cursor-not-allowed ${
-          monospace ? 'font-mono' : ''
-        } ${alignClass}`}
-      />
-    </div>
+    <th
+      className={`${alignClass} ${stickyClass} px-2 py-2 whitespace-nowrap`}
+      style={width ? { width, minWidth: width } : undefined}
+    >
+      {children}
+    </th>
+  );
+}
+
+function Td({
+  align,
+  sticky,
+  className,
+  dir,
+  children,
+}: {
+  align?: 'right' | 'left' | 'center';
+  sticky?: boolean;
+  className?: string;
+  dir?: 'ltr' | 'rtl';
+  children: React.ReactNode;
+}) {
+  const alignClass =
+    align === 'left'
+      ? 'text-left'
+      : align === 'center'
+        ? 'text-center'
+        : 'text-right';
+  const stickyClass = sticky
+    ? 'sticky right-0 z-10 border-l border-ink-200 bg-inherit'
+    : '';
+  return (
+    <td
+      className={`${alignClass} ${stickyClass} px-2 py-1 whitespace-nowrap ${className ?? ''}`}
+      dir={dir}
+    >
+      {children}
+    </td>
   );
 }
 
@@ -720,6 +582,7 @@ function CellInput({
   maxLength,
   placeholder,
   disabled,
+  type,
 }: {
   defaultValue: string;
   onCommit: (v: string) => void;
@@ -727,15 +590,23 @@ function CellInput({
   dir?: 'ltr' | 'rtl';
   monospace?: boolean;
   inputMode?: 'decimal' | 'numeric' | 'text';
-  align?: 'left' | 'right';
+  align?: 'left' | 'right' | 'center';
   maxLength?: number;
   placeholder?: string;
   disabled?: boolean;
+  type?: string;
 }) {
   const [value, setValue] = useState(defaultValue);
+  const alignClass =
+    align === 'left'
+      ? 'text-left tabular-nums'
+      : align === 'center'
+        ? 'text-center'
+        : '';
   return (
     <input
       value={value}
+      type={type}
       onChange={(e) => {
         setValue(e.target.value);
         onValueChange?.(e.target.value);
@@ -748,72 +619,25 @@ function CellInput({
       maxLength={maxLength}
       placeholder={placeholder}
       disabled={disabled}
-      className={`w-full px-2 py-0.5 border border-transparent text-sm bg-transparent
+      className={`w-full px-1.5 py-0.5 border border-transparent text-xs bg-transparent
         hover:border-ink-300 hover:bg-white focus:bg-white focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500/30
         disabled:hover:border-transparent disabled:cursor-text
-        ${align === 'left' ? 'text-left tabular-nums' : ''}
+        ${alignClass}
         ${monospace ? 'font-mono' : ''}`}
     />
   );
 }
 
-function SaveStatus({
-  pending,
-  error,
-  savedAt,
-}: {
-  pending: boolean;
-  error: string | null;
-  savedAt: number | null;
-}) {
-  if (error) {
-    return (
-      <div className="text-xs text-red-700 mt-2 flex items-center gap-1">
-        <AlertCircle size={11} /> {error}
-      </div>
-    );
-  }
-  if (pending) {
-    return (
-      <div className="text-xs text-ink-500 mt-2 flex items-center gap-1">
-        <Loader2 size={11} className="animate-spin" /> שומר...
-      </div>
-    );
-  }
-  if (savedAt && Date.now() - savedAt < 2000) {
-    return (
-      <div className="text-xs text-emerald-600 mt-2 flex items-center gap-1">
-        <CheckCircle2 size={11} /> נשמר
-      </div>
-    );
-  }
-  return null;
-}
-
-function BalanceIndicator({ balanced }: { balanced: boolean }) {
-  if (balanced) {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-medium">
-        <CheckCircle2 size={10} />
-        מאוזן
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 text-[10px] font-medium">
-      <AlertCircle size={10} />
-      לא מאוזן
-    </span>
-  );
-}
-
 function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { bg: string; text: string; border: string; label: string }> = {
+  const map: Record<
+    string,
+    { bg: string; text: string; border: string; label: string }
+  > = {
     draft: {
       bg: 'bg-amber-50',
       text: 'text-amber-800',
       border: 'border-amber-200',
-      label: 'טיוטה (T)',
+      label: 'טיוטה',
     },
     validated: {
       bg: 'bg-blue-50',
@@ -831,7 +655,7 @@ function StatusBadge({ status }: { status: string }) {
       bg: 'bg-purple-50',
       text: 'text-purple-700',
       border: 'border-purple-200',
-      label: 'יוצא לפריוריטי',
+      label: 'יוצא',
     },
     error: {
       bg: 'bg-red-50',
@@ -848,7 +672,7 @@ function StatusBadge({ status }: { status: string }) {
   };
   return (
     <span
-      className={`px-2 py-0.5 rounded text-[10px] font-medium border ${c.bg} ${c.text} ${c.border}`}
+      className={`inline-block px-1.5 py-0 rounded text-[9px] font-medium border ${c.bg} ${c.text} ${c.border}`}
     >
       {c.label}
     </span>
