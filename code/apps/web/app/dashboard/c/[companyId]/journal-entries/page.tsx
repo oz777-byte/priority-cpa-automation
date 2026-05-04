@@ -20,6 +20,7 @@ interface JERow {
   details: string;
   scenario: string | null;
   invoice_id: string | null;
+  je_number: number | null;
 }
 
 interface LineRow {
@@ -29,6 +30,9 @@ interface LineRow {
   account: string;
   debit: number;
   credit: number;
+  debit_fx: number;
+  credit_fx: number;
+  cost_center: string | null;
   details: string | null;
 }
 
@@ -45,7 +49,7 @@ export default async function CompanyJEsPage({
   const admin = getAdminClient();
   const { data: jeRows } = await admin
     .from('journal_entries')
-    .select('id, status, transaction_type, reference1, reference2, document_date, value_date, currency, details, scenario, invoice_id')
+    .select('id, status, transaction_type, reference1, reference2, document_date, value_date, currency, details, scenario, invoice_id, je_number')
     .eq('company_id', company.id)
     .order('document_date', { ascending: false })
     .order('created_at', { ascending: false });
@@ -54,7 +58,7 @@ export default async function CompanyJEsPage({
   const { data: lineRows } = jeIds.length > 0
     ? await admin
         .from('journal_entry_lines')
-        .select('id, je_id, line_no, account, debit, credit, details')
+        .select('id, je_id, line_no, account, debit, credit, debit_fx, credit_fx, cost_center, details')
         .in('je_id', jeIds)
         .order('line_no', { ascending: true })
     : { data: [] as LineRow[] };
@@ -64,6 +68,31 @@ export default async function CompanyJEsPage({
     const arr = linesByJE.get(l.je_id) ?? [];
     arr.push(l);
     linesByJE.set(l.je_id, arr);
+  }
+
+  // Pull accounts master for name lookup (Priority-style "שם חשבון" column).
+  const { data: accountRows } = await admin
+    .from('accounts')
+    .select('code, name')
+    .eq('company_id', company.id);
+  const accountNames: Record<string, string> = {};
+  for (const a of (accountRows ?? []) as Array<{ code: string; name: string }>) {
+    accountNames[a.code] = a.name;
+  }
+  // Also seed supplier and customer codes so credit-side lines show a name.
+  const { data: supplierRows } = await admin
+    .from('suppliers')
+    .select('internal_code, name')
+    .eq('company_id', company.id);
+  for (const s of (supplierRows ?? []) as Array<{ internal_code: string; name: string }>) {
+    if (!accountNames[s.internal_code]) accountNames[s.internal_code] = s.name;
+  }
+  const { data: customerRows } = await admin
+    .from('customers')
+    .select('internal_code, name')
+    .eq('company_id', company.id);
+  for (const c of (customerRows ?? []) as Array<{ internal_code: string; name: string }>) {
+    if (!accountNames[c.internal_code]) accountNames[c.internal_code] = c.name;
   }
 
   const allJes = ((jeRows ?? []) as JERow[]).map((je) => ({
@@ -132,7 +161,7 @@ export default async function CompanyJEsPage({
                 count={editable.length}
                 description="ניתן לערוך כל שורה. השינויים נשמרים אוטומטית."
               />
-              <JEEditorPanel jes={editable} />
+              <JEEditorPanel jes={editable} accountNames={accountNames} />
             </section>
           )}
 
@@ -144,7 +173,7 @@ export default async function CompanyJEsPage({
                 count={exported.length}
                 description="לקריאה בלבד. JE שיוצא נעול לעריכה."
               />
-              <JEEditorPanel jes={exported} />
+              <JEEditorPanel jes={exported} accountNames={accountNames} />
             </section>
           )}
         </div>
