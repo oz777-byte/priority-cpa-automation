@@ -62,7 +62,9 @@ interface InvoiceRaw {
 }
 
 const dataPath = 'C:\\Users\\yaelc\\AppData\\Local\\Temp\\spinframe_data.json';
-const raw = JSON.parse(readFileSync(dataPath, 'utf-8')) as {
+// PowerShell's Out-File -Encoding UTF8 prepends a BOM that JSON.parse rejects.
+const rawText = readFileSync(dataPath, 'utf-8').replace(/^﻿/, '');
+const raw = JSON.parse(rawText) as {
   company: { name: string; tax_id: string };
   suppliers: SupplierRaw[];
   invoices: InvoiceRaw[];
@@ -307,7 +309,7 @@ async function main(): Promise<void> {
 
     const { error } = await admin.from('invoices_inbox').insert({
       company_id: companyId,
-      source: 'manual',
+      source: 'upload',
       canonical,
       fingerprint,
       status,

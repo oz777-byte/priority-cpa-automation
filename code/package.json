@@ -14,7 +14,9 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "verify:supabase": "node --env-file=.env.local --experimental-strip-types scripts/verify-supabase.ts",
     "reset-password": "node --env-file=.env.local --experimental-strip-types scripts/reset-password.ts",
-    "seed:spinframe": "node --env-file=.env.local --experimental-strip-types scripts/seed-spinframe.ts"
+    "seed:spinframe": "node --env-file=.env.local --experimental-strip-types scripts/seed-spinframe.ts",
+    "seed:block3": "node --env-file=.env.local --experimental-strip-types scripts/seed-block3.ts",
+    "convert:ardeni": "node --experimental-strip-types scripts/convert-ardeni-to-hashavshevet.ts"
   },
   "engines": {
     "node": ">=20"
