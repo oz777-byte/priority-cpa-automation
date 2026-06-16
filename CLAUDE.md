@@ -91,7 +91,8 @@
 | User journeys | `02_product/user_journeys.md` |
 | 360 דברים שלא חשבנו | `02_product/360_areas.md` |
 | UI מסכים | `03_design/ui_screens/` |
-| Design system | `03_design/design_system.md` |
+| Design system (אפיון) | `03_design/design_system.md` |
+| **Design contract (קוד פעיל)** | **`design.md`** — חובה לקרוא לפני כל שינוי UI |
 | ארכיטקטורה | `04_architecture/strategic_spec.md` (האב) + `system_diagram.md` |
 | 16 מודולים | `04_architecture/modules_engines.md` |
 | Schema DB | `04_architecture/data_model.md` |
