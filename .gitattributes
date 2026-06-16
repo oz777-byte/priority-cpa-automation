@@ -1,0 +1,6 @@
+# MOVEIN and unified-format data files are byte-exact binary artifacts.
+# Never let git normalize their line endings (CRLF is mandated by the spec).
+*.dat -text
+*.DAT -text
+*.doc -text
+*.prm -text
