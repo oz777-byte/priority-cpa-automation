@@ -1,0 +1,16 @@
+{
+  "name": "@affiliate/aliexpress-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Signed client for the AliExpress affiliate gateway, with a fixture transport for building before credentials arrive.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run --root ../../..",
+    "typecheck": "tsc --noEmit -p ../../../tsconfig.base.json"
+  }
+}

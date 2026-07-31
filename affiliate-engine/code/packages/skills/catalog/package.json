@@ -1,0 +1,20 @@
+{
+  "name": "@affiliate/catalog",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Product normalisation, Choice and store-quality curation, storefront taxonomy, and Hebrew SEO output.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run --root ../../..",
+    "typecheck": "tsc --noEmit -p ../../../tsconfig.base.json"
+  },
+  "dependencies": {
+    "@affiliate/aliexpress-api": "*",
+    "@affiliate/offer-schema": "*"
+  }
+}

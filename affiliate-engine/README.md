@@ -60,6 +60,11 @@ affiliate-engine/
 │   ├── open_decisions.md           החלטות שעוז צריך להכריע
 │   └── extraction_plan.md          איך חותכים לריפו נפרד
 │
+├── 06_storefront/                  ★ OS Tech Ventures — החנות
+│   ├── storefront_spec.md          אפיון מלא: טקסונומיה, סינון, דירוג, SEO
+│   ├── api_integration.md          אינטגרציית AliExpress ומלכודותיה
+│   └── prototype.html              אב-טיפוס ויזואלי (RTL)
+│
 └── code/
     ├── package.json                npm workspace עצמאי
     ├── packages/skills/

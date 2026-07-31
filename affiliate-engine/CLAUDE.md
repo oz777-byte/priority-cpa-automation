@@ -63,15 +63,21 @@ npm run typecheck
 
 ## מצב נוכחי
 
-- ✅ **M1 Skills Foundation** — 4 skills, 122 טסטים עוברים, typecheck נקי
-- ✅ סכמת DB מלאה עם RLS (`code/supabase/migrations/0001_affiliate_schema.sql`) — **טרם הורצה מול Supabase**
+- ✅ **M1 Skills Foundation** — 6 skills, 173 טסטים עוברים, typecheck נקי
+- ✅ סכמות DB עם RLS: `0001_affiliate_schema.sql` (ליבה) + `0002_catalog.sql` (חנות) — **טרם הורצו מול Supabase**
+- ✅ אב-טיפוס ויזואלי: `06_storefront/prototype.html`
 - ⬜ M2 Data Layer · M3 Redirect · M4 Ingest · M5 Dashboard
 
-**נישת האימות הוכרעה (31/07/2026)**: מרקטפלייס מוצרים מוחשיים (AliExpress), תפעול דיגיטלי בלבד.
-הפרוטוקול: `05_implementation/validation_sprint.md`.
+**המוצר (31/07/2026)**: חנות אביזרי סלולר לאייפון וסמסונג בשם **OS Tech Ventures** — AliExpress Choice בלבד, מחנויות מדורגות, SEO אורגני בעברית, אפילייט טהור ללא מלאי.
+האפיון: `06_storefront/storefront_spec.md` · `06_storefront/api_integration.md` · `05_implementation/validation_sprint.md`.
 
-⚠️ **שתי אזהרות שחייבות להישמר בכל שינוי קוד:**
+**התזה שמכתיבה את הארכיטקטורה**: ~$0.60 עמלה להזמנה ⇒ ₪2,000/חודש דורש ~28,000 קליקים. זה בלתי אפשרי עם 10 עמודים ידניים ואפשרי עם ~300 עמודי long-tail אוטומטיים. הערך הוא בצנרת, לא בעמוד.
+
+⚠️ **אזהרות שחייבות להישמר בכל שינוי קוד:**
 1. **מרקטפלייס מוכיח צנרת, לא כלכלה.** `classifyOffer()` מסמן הצעות כאלה `validation_only`. אל תשנה את הסיווג ואל תרכך את `DEFAULT_FIT_CRITERIA` כדי ש"יעבור" — הרף הנמוך חי ב-`VALIDATION_FIT_CRITERIA` בנפרד, וזו כל הנקודה.
 2. **פרופיל הרשת `aliexpress` לא אומת.** שם פרמטר ה-SubID הוא placeholder. `assertProfileVerified()` חוסם תנועה אמיתית עד שנקרא מלינק חי ועודכן.
+3. **slug של עמוד הוא לטיני, לא עברי.** ה-slug הופך למקטע הראשון ב-SubID שחייב להתאים ל-`[a-z0-9-]`. slug עברי הופך כל קליק בעמוד לבלתי ניתן לייחוס.
+4. **אין דירוג מוצר ב-JSON-LD.** למרקטפלייס יש דירוג *מוכר*. הצגתו כדירוג מוצר היא הפרת structured data וגם טענה שקרית לקונה.
+5. **אין מפתחות API?** `createMockTransport()` — כל הצנרת נבנית ונבדקת בלעדיהם.
 
 **חוסם את שלב 2**: D1 (הנישה הכלכלית) עדיין פתוחה ב-`open_decisions.md`.
