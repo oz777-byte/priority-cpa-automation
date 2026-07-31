@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_FIT_CRITERIA,
   OfferValidationError,
+  VALIDATION_FIT_CRITERIA,
   assertCanActivate,
+  classifyOffer,
   currencyExponent,
   evaluateOfferFit,
   expectedCommissionMinor,
@@ -203,5 +205,63 @@ describe('evaluateOfferFit', () => {
     const result = evaluateOfferFit(offer);
     expect(result.verdict).toBe('insufficient_data');
     expect(result.expectedCommissionMinor).toBeNull();
+  });
+
+  it('reports which criteria produced the verdict', () => {
+    const offer = normalizeOffer(baseInput);
+    expect(evaluateOfferFit(offer).criteria).toBe('portfolio');
+    expect(evaluateOfferFit(offer, VALIDATION_FIT_CRITERIA).criteria).toBe('validation');
+  });
+});
+
+describe('classifyOffer', () => {
+  // A marketplace programme for cheap physical goods: a few percent of a small
+  // order, and an attribution window measured in days.
+  const marketplaceOffer = normalizeOffer({
+    slug: 'marketplace-gadgets',
+    networkSlug: 'aliexpress',
+    advertiserName: 'Marketplace',
+    commissionModel: 'revshare',
+    payoutPercent: 4,
+    recurring: false,
+    cookieWindowDays: 3,
+    destinationUrl: 'https://marketplace.example/item/123',
+    verificationSource: 'https://marketplace.example/affiliate-terms',
+    verifiedAt: '2026-07-20',
+  });
+
+  it('classifies a marketplace offer as validation_only, not portfolio', () => {
+    // $15 order at 4% is 60 cents — enough to prove a conversion lands,
+    // nowhere near enough to repay hours of content work.
+    const result = classifyOffer(marketplaceOffer, { assumedAovMinor: 1500 });
+    expect(result.offerClass).toBe('validation_only');
+    expect(result.validation.verdict).toBe('accept');
+    expect(result.portfolio.verdict).toBe('reject');
+  });
+
+  it('names what holds a validation_only offer back', () => {
+    const result = classifyOffer(marketplaceOffer, { assumedAovMinor: 1500 });
+    expect(result.summary).toMatch(/prove tracking works/);
+    expect(result.summary).toMatch(/cookie window is 3 days/);
+    expect(result.summary).toMatch(/below the 2500 floor/);
+  });
+
+  it('classifies a recurring software offer as portfolio', () => {
+    const result = classifyOffer(normalizeOffer(baseInput), { assumedAovMinor: 4000 });
+    expect(result.offerClass).toBe('portfolio');
+    expect(result.summary).toMatch(/worth building content around/);
+  });
+
+  it('rejects an offer that fails even the validation bar', () => {
+    const pennies = normalizeOffer({
+      ...marketplaceOffer,
+      slug: 'pennies',
+      commissionModel: 'cpa',
+      payoutPercent: null,
+      payoutAmountMinor: 5,
+    });
+    const result = classifyOffer(pennies);
+    expect(result.offerClass).toBe('reject');
+    expect(result.summary).toMatch(/Fails even the validation bar/);
   });
 });

@@ -58,6 +58,18 @@ const ADAPTERS: NetworkAdapter[] = [
     },
   }),
   createGenericCsvAdapter({
+    networkSlug: 'aliexpress',
+    columns: {
+      externalId: ['order_id', 'orderid', 'transaction_id', 'id'],
+      subId: ['aff_sub1', 'sub_id', 'subid', 'tracking_id', 'sid'],
+      status: ['order_status', 'status', 'settlement_status'],
+      saleAmount: ['order_amount', 'paid_amount', 'sale_amount'],
+      commission: ['estimated_commission', 'commission', 'estimated_paid_commission'],
+      occurredAt: ['order_time', 'paid_time', 'created_at', 'date'],
+      advertiser: ['product_name', 'category', 'product'],
+    },
+  }),
+  createGenericCsvAdapter({
     networkSlug: 'direct',
     displayName: 'Direct advertiser agreement',
     defaultCurrency: 'ILS',

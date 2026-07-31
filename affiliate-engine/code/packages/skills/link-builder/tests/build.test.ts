@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_PROFILE,
+  NETWORK_PROFILES,
   SubIdError,
+  UnverifiedProfileError,
+  assertProfileVerified,
   buildTrackingLink,
   encodeSubId,
   getNetworkProfile,
@@ -21,6 +24,70 @@ describe('getNetworkProfile', () => {
     const profile = getNetworkProfile('some-new-network');
     expect(profile.maxLength).toBe(DEFAULT_PROFILE.maxLength);
     expect(profile.slug).toBe('some-new-network');
+  });
+
+  it('ships every profile unverified, because none has made a live round trip', () => {
+    expect(Object.values(NETWORK_PROFILES).every((p) => !p.verified)).toBe(true);
+    expect(DEFAULT_PROFILE.verified).toBe(false);
+  });
+});
+
+describe('assertProfileVerified', () => {
+  it('blocks live traffic on an unverified profile', () => {
+    expect(() => assertProfileVerified(getNetworkProfile('aliexpress'))).toThrow(
+      UnverifiedProfileError,
+    );
+    expect(() => assertProfileVerified(getNetworkProfile('aliexpress'))).toThrow(
+      /confirm the SubID appears in the report/,
+    );
+  });
+
+  it('passes once a profile has been confirmed against a live link', () => {
+    expect(() =>
+      assertProfileVerified({ ...getNetworkProfile('aliexpress'), verified: true }),
+    ).not.toThrow();
+  });
+
+  it('does not block building the test link that does the verifying', () => {
+    // Clicking a built link is how a profile earns `verified`, so link
+    // construction itself must stay unguarded.
+    expect(() =>
+      buildTrackingLink({
+        destinationUrl: 'https://marketplace.example/item/123',
+        networkSlug: 'aliexpress',
+        parts: shortParts,
+      }),
+    ).not.toThrow();
+  });
+});
+
+describe('aliexpress profile', () => {
+  it('sanitises dots away, since the field is short and dot-averse', () => {
+    const link = buildTrackingLink({
+      destinationUrl: 'https://marketplace.example/item/123',
+      networkSlug: 'aliexpress',
+      parts: { asset: 'usb-c-hubs', placement: 'table-row-1' },
+    });
+    const sent = new URL(link.url).searchParams.get(link.profile.subIdParam);
+    expect(sent).toBe('usb-c-hubs_table-row-1');
+    expect(link.subId.encoding).toBe('sanitized');
+  });
+
+  it('hashes a long subid rather than truncating it into a 50-char field', () => {
+    const link = buildTrackingLink({
+      destinationUrl: 'https://marketplace.example/item/123',
+      networkSlug: 'aliexpress',
+      parts: {
+        asset: 'best-usb-c-hubs-for-macbook-2026',
+        placement: 'comparison-table-row-four',
+        campaign: 'organic',
+      },
+    });
+    expect(link.subId.encoding).toBe('hashed');
+    const sent = new URL(link.url).searchParams.get(link.profile.subIdParam)!;
+    expect(resolveSubId(sent, link.profile, () => link.subId.canonical).parts?.asset).toBe(
+      'best-usb-c-hubs-for-macbook-2026',
+    );
   });
 });
 

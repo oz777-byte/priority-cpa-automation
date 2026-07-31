@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_THRESHOLDS,
+  PHYSICAL_GOODS_THRESHOLDS,
   computeAssetMetrics,
   daysBetween,
   rankRecommendations,
@@ -206,5 +207,98 @@ describe('DEFAULT_THRESHOLDS', () => {
   it('keeps the decision floors as configuration, not magic numbers', () => {
     expect(DEFAULT_THRESHOLDS.minClicks).toBe(100);
     expect(DEFAULT_THRESHOLDS.killEpcMinor).toBeLessThan(DEFAULT_THRESHOLDS.scaleEpcMinor);
+  });
+});
+
+describe('PHYSICAL_GOODS_THRESHOLDS', () => {
+  // A marketplace page that is working: 1,200 clicks, 40 approved orders of
+  // about $15 paying 4%, so roughly 60 cents a conversion and two cents a click.
+  const marketplaceAsset = () =>
+    computeAssetMetrics({
+      assetId: 'usb-hubs',
+      title: 'USB-C hubs compared',
+      clicks: 1200,
+      pageviews: 9000,
+      conversionsTotal: 48,
+      conversionsApproved: 40,
+      conversionsReversed: 8,
+      grossRevenueMinor: 2880,
+      approvedRevenueMinor: 2400,
+      currency: 'USD',
+      hoursInvested: 6,
+      publishedAt: '2026-02-01',
+    });
+
+  it('would be killed by the software thresholds despite converting fine', () => {
+    const rec = recommendAction(marketplaceAsset(), {
+      today: TODAY,
+      publishedAt: '2026-02-01',
+    });
+    expect(rec.action).toBe('kill');
+  });
+
+  it('reads as viable under the physical-goods thresholds', () => {
+    const rec = recommendAction(marketplaceAsset(), {
+      today: TODAY,
+      publishedAt: '2026-02-01',
+      thresholds: PHYSICAL_GOODS_THRESHOLDS,
+    });
+    expect(rec.action).toBe('hold');
+  });
+
+  it('still kills a marketplace page that earns nothing per click', () => {
+    const dead = computeAssetMetrics({
+      assetId: 'phone-cases',
+      title: 'Phone cases roundup',
+      clicks: 1500,
+      conversionsTotal: 6,
+      conversionsApproved: 5,
+      conversionsReversed: 1,
+      grossRevenueMinor: 360,
+      approvedRevenueMinor: 300,
+      currency: 'USD',
+      hoursInvested: 5,
+      publishedAt: '2026-01-01',
+    });
+    const rec = recommendAction(dead, {
+      today: TODAY,
+      publishedAt: '2026-01-01',
+      thresholds: PHYSICAL_GOODS_THRESHOLDS,
+    });
+    expect(rec.action).toBe('kill');
+    // Sub-cent EPC must stay legible rather than rounding to "0.00".
+    expect(rec.reason).toMatch(/0\.0020 USD/);
+  });
+
+  it('demands far more clicks before judging, since commissions are tiny', () => {
+    expect(PHYSICAL_GOODS_THRESHOLDS.minClicks).toBeGreaterThan(
+      DEFAULT_THRESHOLDS.minClicks * 5,
+    );
+  });
+
+  it('tolerates the cancellations and refunds physical orders bring', () => {
+    expect(PHYSICAL_GOODS_THRESHOLDS.maxReversalRate).toBeGreaterThan(
+      DEFAULT_THRESHOLDS.maxReversalRate,
+    );
+  });
+
+  it('still refuses to judge a page below its own click floor', () => {
+    const thin = computeAssetMetrics({
+      assetId: 'thin',
+      title: 'Too early to tell',
+      clicks: 300,
+      conversionsTotal: 0,
+      conversionsApproved: 0,
+      conversionsReversed: 0,
+      grossRevenueMinor: 0,
+      approvedRevenueMinor: 0,
+      currency: 'USD',
+      hoursInvested: 3,
+    });
+    const rec = recommendAction(thin, {
+      today: TODAY,
+      thresholds: PHYSICAL_GOODS_THRESHOLDS,
+    });
+    expect(rec.action).toBe('insufficient_data');
   });
 });

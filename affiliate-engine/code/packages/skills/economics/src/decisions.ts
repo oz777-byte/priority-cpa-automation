@@ -1,4 +1,4 @@
-import { formatMinor } from '@affiliate/offer-schema';
+import { currencyExponent, formatMinor } from '@affiliate/offer-schema';
 import type { AssetMetrics } from './metrics';
 import { daysBetween } from './metrics';
 
@@ -37,6 +37,37 @@ export const DEFAULT_THRESHOLDS: DecisionThresholds = {
   killEpcMinor: 15, // $0.15 per click
   maxReversalRate: 0.3,
   brokenTrackingClicks: 250,
+};
+
+/**
+ * Thresholds for marketplace programmes selling low-value physical goods.
+ *
+ * Applying the default thresholds to this traffic would mark every page as a
+ * kill: a few percent of a small order is cents per conversion, so an EPC two
+ * orders of magnitude below the software floor is normal rather than a
+ * failure. Two consequences follow, and both are encoded here.
+ *
+ * First, the click floor rises sharply. At these commissions a hundred clicks
+ * can easily return zero through ordinary luck, so a judgement made on that
+ * sample says nothing.
+ *
+ * Second, the reversal tolerance rises. Physical orders get cancelled, refunded
+ * and returned at rates that would signal fraud in a software programme.
+ *
+ * Raising the bar back up is the whole point of moving off this preset — a
+ * portfolio that stays here indefinitely is one that never found its business.
+ */
+export const PHYSICAL_GOODS_THRESHOLDS: DecisionThresholds = {
+  minClicks: 1000,
+  minAgeDays: 60,
+  // Calibration, for a $15 order paying about 4%: a page converting 3% of its
+  // clicks earns roughly two cents per click. That is a working page, so the
+  // kill floor sits below it and the scale bar above it — reaching `scale`
+  // here takes an unusually good page, which is the honest picture.
+  scaleEpcMinor: 4, // $0.04 per click
+  killEpcMinor: 1, // $0.01 per click
+  maxReversalRate: 0.45,
+  brokenTrackingClicks: 800,
 };
 
 export interface Recommendation {
@@ -156,7 +187,15 @@ function formatRate(rate: number): string {
  * EPC is a rate, so it is fractional even though it is measured in minor
  * units. Rounding to whole minor units keeps the message readable without
  * changing the decision, which was already made against the exact value.
+ *
+ * Marketplace traffic earns well under a cent per click, where that rounding
+ * would print "0.00" and hide the difference between a thin page and a dead
+ * one — so sub-cent rates keep extra decimals instead.
  */
 function formatMoney(minor: number, currency: string): string {
+  if (minor !== 0 && Math.abs(minor) < 1) {
+    const exponent = currencyExponent(currency);
+    return `${(minor / 10 ** exponent).toFixed(exponent + 2)} ${currency.toUpperCase()}`;
+  }
   return formatMinor(Math.round(minor), currency);
 }

@@ -14,7 +14,13 @@ export {
 } from './subid';
 
 export type { NetworkProfile } from './networks';
-export { DEFAULT_PROFILE, NETWORK_PROFILES, getNetworkProfile } from './networks';
+export {
+  DEFAULT_PROFILE,
+  NETWORK_PROFILES,
+  UnverifiedProfileError,
+  assertProfileVerified,
+  getNetworkProfile,
+} from './networks';
 
 export type {
   ResolveFailureReason,

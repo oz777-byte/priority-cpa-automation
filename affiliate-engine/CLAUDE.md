@@ -63,8 +63,15 @@ npm run typecheck
 
 ## מצב נוכחי
 
-- ✅ **M1 Skills Foundation** — 4 skills, 103 טסטים עוברים, typecheck נקי
+- ✅ **M1 Skills Foundation** — 4 skills, 122 טסטים עוברים, typecheck נקי
 - ✅ סכמת DB מלאה עם RLS (`code/supabase/migrations/0001_affiliate_schema.sql`) — **טרם הורצה מול Supabase**
 - ⬜ M2 Data Layer · M3 Redirect · M4 Ingest · M5 Dashboard
 
-**חוסם**: 7 החלטות פתוחות ב-`05_implementation/open_decisions.md`. D1 (נישה) חוסמת הכל.
+**נישת האימות הוכרעה (31/07/2026)**: מרקטפלייס מוצרים מוחשיים (AliExpress), תפעול דיגיטלי בלבד.
+הפרוטוקול: `05_implementation/validation_sprint.md`.
+
+⚠️ **שתי אזהרות שחייבות להישמר בכל שינוי קוד:**
+1. **מרקטפלייס מוכיח צנרת, לא כלכלה.** `classifyOffer()` מסמן הצעות כאלה `validation_only`. אל תשנה את הסיווג ואל תרכך את `DEFAULT_FIT_CRITERIA` כדי ש"יעבור" — הרף הנמוך חי ב-`VALIDATION_FIT_CRITERIA` בנפרד, וזו כל הנקודה.
+2. **פרופיל הרשת `aliexpress` לא אומת.** שם פרמטר ה-SubID הוא placeholder. `assertProfileVerified()` חוסם תנועה אמיתית עד שנקרא מלינק חי ועודכן.
+
+**חוסם את שלב 2**: D1 (הנישה הכלכלית) עדיין פתוחה ב-`open_decisions.md`.

@@ -54,6 +54,7 @@ affiliate-engine/
 │   └── compliance_israel.md        מס, מע"מ, גילוי נאות, GDPR
 │
 ├── 05_implementation/
+│   ├── validation_sprint.md        ★ הספרינט הפעיל — 4 שבועות, 15 שעות
 │   ├── phase_1_mvp.md              5 milestones, DoD מדיד
 │   ├── skills_to_build.md          9 skills עם I/O contract
 │   ├── open_decisions.md           החלטות שעוז צריך להכריע
@@ -84,4 +85,7 @@ affiliate-engine/
 
 ## הצעד הבא
 
-קרא `01_strategy/reality_check.md` → `05_implementation/open_decisions.md` → הכרע 4 החלטות → מתחילים MVP.
+**ספרינט אימות פעיל** — `05_implementation/validation_sprint.md`.
+נישה: מרקטפלייס מוצרים מוחשיים (AliExpress), תפעול דיגיטלי בלבד. יעד יחיד: המרה אחת אמיתית, מיוחסת נכון לנכס ולמיקום.
+
+השלב הקריטי הוא שבוע 2 — קריאת שם פרמטר ה-SubID מלינק חי. עד שזה נסגר, `assertProfileVerified()` חוסם תנועה אמיתית.

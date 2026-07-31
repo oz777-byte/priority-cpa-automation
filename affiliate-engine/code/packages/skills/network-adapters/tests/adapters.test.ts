@@ -214,9 +214,40 @@ describe('generic csv adapter', () => {
   });
 });
 
+describe('aliexpress adapter', () => {
+  const adapter = getAdapter('aliexpress');
+
+  it('reads a marketplace order export', () => {
+    const report = [
+      'Order Id,aff_sub1,Order Status,Order Amount,Estimated Commission,Currency,Order Time',
+      'O-1,usb-c-hubs_table-row-1,Finished,"$15.40","$0.62",USD,2026-03-15',
+      'O-2,usb-c-hubs_hero-cta,Invalid,"$9.90","$0.40",USD,2026-03-16',
+    ].join('\n');
+
+    const result = adapter.parseReport(report);
+    expect(result.stats.rowsImported).toBe(2);
+    expect(result.conversions[0]!.commissionAmountMinor).toBe(62);
+    expect(result.conversions[0]!.resolved?.parts).toEqual({
+      asset: 'usb-c-hubs',
+      placement: 'table-row-1',
+    });
+  });
+
+  it('does not read an unfamiliar marketplace status as approved', () => {
+    // Marketplace exports use their own vocabulary, and reading an unknown
+    // word optimistically would inflate EPC on the cheapest possible traffic.
+    const report = [
+      'Order Id,aff_sub1,Order Status,Estimated Commission,Currency,Order Time',
+      'O-3,usb-c-hubs_hero-cta,Finished,"$0.62",USD,2026-03-15',
+    ].join('\n');
+    expect(adapter.parseReport(report).conversions[0]!.status).toBe('pending');
+  });
+});
+
 describe('registry', () => {
   it('exposes the shipped adapters', () => {
     expect(listAdapters().map((a) => a.slug)).toContain('partnerstack');
+    expect(listAdapters().map((a) => a.slug)).toContain('aliexpress');
   });
 
   it('names the known networks when asked for one that does not exist', () => {

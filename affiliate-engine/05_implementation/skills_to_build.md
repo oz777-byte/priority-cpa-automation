@@ -12,10 +12,12 @@
 normalizeOffer(input): Offer                      // ולידציה — מדווחת על כל השגיאות יחד
 assertCanActivate(offer): void                    // חוסם הפעלה ללא בדיקת tracking
 evaluateOfferFit(offer, criteria): OfferFitResult // accept | reject | insufficient_data
+classifyOffer(offer, opts): OfferClassification   // portfolio | validation_only | reject
 expectedCommissionMinor(offer, aov?): number|null // null במקום ניחוש
 toMinor / fromMinor / percentOfMinor / formatMinor
 ```
 **החלטה מעניינת**: `expectedCommissionMinor` מחזיר `null` ל-revshare בלי הנחת AOV, במקום להמציא מספר משכנע.
+**החלטה מעניינת שנייה**: `classifyOffer` מפריד בין רף פורטפוליו לרף אימות. הצעה שעוברת אימות ונופלת בפורטפוליו מסווגת `validation_only` ואומרת מה חוסם אותה — כך שהצלחה בבדיקת צנרת לא נקראת בטעות כעסק מוכח.
 
 ### `@affiliate/link-builder`
 ליבת ה-attribution — קידוד ופענוח SubID.
@@ -25,6 +27,7 @@ encodeSubId(parts, profile): EncodedSubId  // plain | sanitized | hashed
 buildTrackingLink(input): TrackingLink
 resolveSubId(raw, profile, lookup?): ResolvedSubId
 getNetworkProfile(slug): NetworkProfile
+assertProfileVerified(profile): void       // חוסם תנועה אמיתית על פרופיל שלא אומת
 ```
 **החלטה מעניינת**: כשה-SubID לא נכנס במגבלת הרשת — hash דטרמיניסטי באורך קבוע (16 תווים), לא חיתוך. חיתוך היה ממזג בשקט שני נכסים עם prefix משותף.
 
@@ -34,6 +37,7 @@ getNetworkProfile(slug): NetworkProfile
 computeAssetMetrics(input): AssetMetrics       // EPC, CR, RPM, TimeROI, approval/reversal
 recommendAction(metrics, ctx): Recommendation  // scale | hold | investigate | kill | insufficient_data
 rankRecommendations(recs): Recommendation[]
+DEFAULT_THRESHOLDS / PHYSICAL_GOODS_THRESHOLDS // ספים לפי סוג נישה
 ```
 **החלטה מעניינת**: הרבה קליקים עם אפס המרות מסווג `investigate` ולא `kill` — זו כמעט תמיד תקלת tracking, ולהרוג עמוד בגלל אינסטלציה שבורה הוא הרס נכס.
 
