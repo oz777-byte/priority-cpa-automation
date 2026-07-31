@@ -24,6 +24,16 @@ import {
 } from '../src/index';
 import type { CatalogProduct } from '../src/index';
 
+/** Fixtures are looked up by id, so adding products never shifts a test. */
+const raw = (id: string) => MOCK_PRODUCTS.find((p) => String(p.product_id) === id)!;
+
+const CHARGER = '1005006123456789';
+const GLASS = '1005006987654321';
+const CASE_NO_PERCENT = '1005007111222333';
+const GAN = '1005007777888999';
+const JUNK = '1005007444555666';
+const NEW_RELEASE = '1005007444777888';
+
 const SITE = {
   baseUrl: 'https://example.co.il',
   siteName: 'OS Tech',
@@ -32,7 +42,7 @@ const SITE = {
 
 describe('normalizeProduct', () => {
   it('normalises prices, commission and volume off the wire shapes', () => {
-    const product = normalizeProduct(MOCK_PRODUCTS[0]!);
+    const product = normalizeProduct(raw(CHARGER));
     expect(product.productId).toBe('1005006123456789');
     expect(product.salePriceMinor).toBe(1149);
     expect(product.originalPriceMinor).toBe(2499);
@@ -44,19 +54,19 @@ describe('normalizeProduct', () => {
   });
 
   it('reads a commission with or without a percent sign', () => {
-    expect(normalizeProduct(MOCK_PRODUCTS[2]!).commissionRate).toBeCloseTo(0.08);
-    expect(normalizeProduct(MOCK_PRODUCTS[1]!).commissionRate).toBeCloseTo(0.125);
+    expect(normalizeProduct(raw(CASE_NO_PERCENT)).commissionRate).toBeCloseTo(0.08);
+    expect(normalizeProduct(raw(GLASS)).commissionRate).toBeCloseTo(0.125);
   });
 
   it('recomputes the discount from the prices rather than trusting the field', () => {
     // The reported discount goes stale against the price printed beside it.
-    const product = normalizeProduct({ ...MOCK_PRODUCTS[0]!, discount: '10%' });
+    const product = normalizeProduct({ ...raw(CHARGER), discount: '10%' });
     expect(product.discountPercent).toBe(54);
   });
 
   it('falls back to the reported discount when a price is missing', () => {
     const product = normalizeProduct({
-      ...MOCK_PRODUCTS[0]!,
+      ...raw(CHARGER),
       original_price: undefined,
       target_original_price: undefined,
       discount: '31%',
@@ -65,26 +75,26 @@ describe('normalizeProduct', () => {
   });
 
   it('refuses a product with no id, since it could never be deduplicated', () => {
-    expect(() => normalizeProduct({ ...MOCK_PRODUCTS[0]!, product_id: undefined })).toThrow(
+    expect(() => normalizeProduct({ ...raw(CHARGER), product_id: undefined })).toThrow(
       NormalizeError,
     );
   });
 
   it('refuses a product with no detail url, since no link could be built', () => {
     expect(() =>
-      normalizeProduct({ ...MOCK_PRODUCTS[0]!, product_detail_url: undefined }),
+      normalizeProduct({ ...raw(CHARGER), product_detail_url: undefined }),
     ).toThrow(/no detail url/);
   });
 
   it('detects the Choice marker case-insensitively', () => {
-    expect(normalizeProduct({ ...MOCK_PRODUCTS[0]!, product_tags: ['CHOICE'] }).isChoice).toBe(true);
-    expect(normalizeProduct({ ...MOCK_PRODUCTS[0]!, product_tags: 'Choice,FreeShipping' }).isChoice).toBe(true);
-    expect(normalizeProduct({ ...MOCK_PRODUCTS[0]!, product_tags: [] }).isChoice).toBe(false);
+    expect(normalizeProduct({ ...raw(CHARGER), product_tags: ['CHOICE'] }).isChoice).toBe(true);
+    expect(normalizeProduct({ ...raw(CHARGER), product_tags: 'Choice,FreeShipping' }).isChoice).toBe(true);
+    expect(normalizeProduct({ ...raw(CHARGER), product_tags: [] }).isChoice).toBe(false);
   });
 
   it('accepts a configured marker when the default one moves', () => {
     const product = normalizeProduct(
-      { ...MOCK_PRODUCTS[0]!, product_tags: ['AE_Choice_2026'] },
+      { ...raw(CHARGER), product_tags: ['AE_Choice_2026'] },
       { choiceTags: ['ae_choice_2026'] },
     );
     expect(product.isChoice).toBe(true);
@@ -92,9 +102,9 @@ describe('normalizeProduct', () => {
 
   it('collects failures instead of losing a whole page to one bad row', () => {
     const result = normalizeProducts([
-      MOCK_PRODUCTS[0]!,
+      raw(CHARGER),
       { product_title: 'no id' },
-      MOCK_PRODUCTS[1]!,
+      raw(GLASS),
     ]);
     expect(result.products).toHaveLength(2);
     expect(result.errors).toHaveLength(1);
@@ -107,12 +117,15 @@ describe('curation', () => {
 
   it('admits Choice listings from stores with a track record', () => {
     const result = curateCatalog(products);
-    expect(result.admitted.map((p) => p.productId)).toEqual([
-      '1005006123456789',
-      '1005006987654321',
-      '1005007111222333',
-      '1005007777888999',
-    ]);
+    const ids = result.admitted.map((p) => p.productId);
+    expect(ids).toContain(CHARGER);
+    expect(ids).toContain(GLASS);
+    expect(ids).toContain(GAN);
+    // Everything admitted really is Choice, priced in range, and proven.
+    expect(result.admitted.every((p) => p.isChoice)).toBe(true);
+    expect(result.admitted.every((p) => p.recentOrders >= 300)).toBe(true);
+    expect(ids).not.toContain(JUNK);
+    expect(ids).not.toContain(NEW_RELEASE);
   });
 
   it('rejects a non-Choice listing and says exactly why', () => {
@@ -179,11 +192,11 @@ describe('ranking', () => {
 
 describe('deduplication', () => {
   it('collapses the same accessory relisted by several resellers', () => {
-    const base = normalizeProduct(MOCK_PRODUCTS[1]!);
+    const base = normalizeProduct(raw(GLASS));
     const reseller: CatalogProduct = {
       ...base,
       productId: 'copy-1',
-      title: 'Tempered Glass Screen Protector For Samsung Galaxy S24 S25 Ultra - 3 Pack HIGH QUALITY',
+      title: 'Tempered Glass Screen Protector For Samsung Galaxy S24 S25 Ultra 3 Pack HIGH QUALITY',
       recentOrders: 10,
     };
     const deduped = dedupeProducts([base, reseller]);

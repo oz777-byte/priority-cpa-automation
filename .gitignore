@@ -30,3 +30,6 @@ npm-debug.log*
 
 # Next.js generated
 **/next-env.d.ts
+
+# Static export output
+**/out/

@@ -1,0 +1,23 @@
+{
+  "name": "@affiliate/storefront",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OS Tech Ventures storefront — statically generated Hebrew accessory catalog.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "npx serve out"
+  },
+  "dependencies": {
+    "@affiliate/aliexpress-api": "*",
+    "@affiliate/catalog": "*",
+    "@affiliate/offer-schema": "*",
+    "next": "^16.2.12",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3"
+  }
+}

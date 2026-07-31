@@ -50,10 +50,22 @@ export function createMockTransport(products: RawProduct[] = MOCK_PRODUCTS): Tra
       };
     }
 
+    // Keyword matching is crude on purpose — enough that different category
+    // queries return different products, so a build over the whole taxonomy
+    // exercises the same paths a live sync will.
+    const keywords = (params.get('keywords') ?? '').toLowerCase();
+    const terms = keywords.split(/\s+/).filter((term) => term.length > 2);
+    const matched = terms.length
+      ? products.filter((product) => {
+          const title = (product.product_title ?? '').toLowerCase();
+          return terms.every((term) => title.includes(term));
+        })
+      : products;
+
     const pageSize = Number(params.get('page_size') ?? 20);
     const page = Number(params.get('page_no') ?? 1);
     const start = (page - 1) * pageSize;
-    const slice = products.slice(start, start + pageSize);
+    const slice = matched.slice(start, start + pageSize);
 
     return {
       aliexpress_affiliate_product_query_response: {
@@ -62,7 +74,7 @@ export function createMockTransport(products: RawProduct[] = MOCK_PRODUCTS): Tra
           result: {
             current_page_no: page,
             page_size: pageSize,
-            total_record_count: products.length,
+            total_record_count: matched.length,
             // A single result really does arrive unwrapped; the client handles both.
             products: { product: slice.length === 1 ? slice[0] : slice },
           },
@@ -73,65 +85,55 @@ export function createMockTransport(products: RawProduct[] = MOCK_PRODUCTS): Tra
 }
 
 export const MOCK_PRODUCTS: RawProduct[] = [
-  {
-    product_id: '1005006123456789',
-    product_title: 'Magnetic Wireless Charger 15W for iPhone 15 16 Pro Max MagSafe Compatible',
-    product_main_image_url: 'https://example-cdn.invalid/img/magsafe-charger.jpg',
-    product_detail_url: 'https://www.aliexpress.com/item/1005006123456789.html',
-    original_price: '24.99',
-    sale_price: '11.49',
-    target_sale_price: '11.49',
-    sale_price_currency: 'USD',
-    discount: '54%',
-    commission_rate: '9.0%',
-    first_level_category_id: '509',
-    first_level_category_name: 'Phone Accessories',
-    shop_id: '9001',
-    shop_name: 'TechGear Official Store',
-    shop_url: 'https://www.aliexpress.com/store/9001',
-    evaluate_rate: '97.4',
-    lastest_volume: 4820,
-    product_tags: ['Choice', 'FreeShipping'],
-  },
-  {
-    product_id: '1005006987654321',
-    product_title: 'Tempered Glass Screen Protector for Samsung Galaxy S24 S25 Ultra 3 Pack',
-    product_main_image_url: 'https://example-cdn.invalid/img/s24-glass.jpg',
-    product_detail_url: 'https://www.aliexpress.com/item/1005006987654321.html',
-    original_price: '12.00',
-    sale_price: '4.32',
-    sale_price_currency: 'USD',
-    discount: '64%',
-    commission_rate: '12.5%',
-    first_level_category_id: '509',
-    first_level_category_name: 'Phone Accessories',
-    shop_id: '9002',
-    shop_name: 'ProtectPro Store',
-    evaluate_rate: '98.1',
-    lastest_volume: 12400,
-    product_tags: ['Choice'],
-  },
-  {
-    product_id: '1005007111222333',
-    product_title: 'Shockproof Clear Case for iPhone 16 Pro Camera Lens Protection',
-    product_main_image_url: 'https://example-cdn.invalid/img/iphone16-case.jpg',
-    product_detail_url: 'https://www.aliexpress.com/item/1005007111222333.html',
-    original_price: '9.90',
-    sale_price: '3.15',
-    sale_price_currency: 'USD',
-    commission_rate: '8.0',
-    first_level_category_id: '509',
-    shop_id: '9003',
-    shop_name: 'CaseHouse Store',
-    evaluate_rate: '95.8',
-    lastest_volume: 2210,
-    product_tags: ['Choice'],
-  },
+  // --- chargers -----------------------------------------------------
+  p('1005006123456789', 'Magnetic Wireless Charger 15W for iPhone 15 16 17 Pro Max MagSafe', 'TechGear Official Store', '9001', 97.4, 4820, '11.49', '24.99', '9.0%'),
+  p('1005007777888999', '65W GaN Fast Charger USB C PD Adapter for iPhone Samsung Galaxy Laptop', 'PowerMax Official Store', '9005', 96.9, 7630, '18.76', '39.90', '10.0%'),
+  p('1005007777111222', 'Magnetic Wireless Charger Stand for Samsung Galaxy S24 S25 Ultra 15W', 'PowerMax Official Store', '9005', 96.9, 3140, '14.20', '29.99', '9.5%'),
+  p('1005007777333444', '33W Fast Charger Adapter for iPhone 16 Pro Max PD Wall Plug', 'TechGear Official Store', '9001', 97.4, 2890, '7.85', '16.90', '8.5%'),
+  p('1005007777555666', '45W GaN Fast Charger USB C Dual Port for Samsung Galaxy S25 Ultra', 'PowerMax Official Store', '9005', 96.9, 1980, '15.40', '32.00', '9.0%'),
+
+  // --- screen protectors --------------------------------------------
+  p('1005006987654321', 'Tempered Glass Screen Protector for Samsung Galaxy S24 S25 Ultra 3 Pack', 'ProtectPro Store', '9002', 98.1, 12400, '4.32', '12.00', '12.5%'),
+  p('1005006987111222', 'Tempered Glass Screen Protector for iPhone 16 17 Pro Max 3 Pack HD', 'ProtectPro Store', '9002', 98.1, 9870, '3.98', '11.50', '12.5%'),
+  p('1005006987333444', 'Privacy Screen Protector Anti Spy for iPhone 16 Pro Max Tempered Glass', 'ProtectPro Store', '9002', 98.1, 3420, '6.74', '15.90', '11.0%'),
+  p('1005006987555666', 'Privacy Screen Protector for Samsung Galaxy S25 Ultra Anti Spy Glass', 'ShieldWorks Store', '9006', 96.2, 1760, '7.10', '17.40', '10.5%'),
+
+  // --- cases --------------------------------------------------------
+  // Commission arrives here without a percent sign — the gateway sends both forms.
+  p('1005007111222333', 'Shockproof Clear Case for iPhone 16 17 Pro Max Camera Lens Protection', 'CaseHouse Store', '9003', 95.8, 2210, '3.15', '9.90', '8.0'),
+  p('1005007111444555', 'Magnetic Clear Case for iPhone 16 Pro MagSafe Shockproof Slim Cover', 'CaseHouse Store', '9003', 95.8, 5640, '5.44', '14.20', '9.0%'),
+  p('1005007111666777', 'Shockproof Clear Case for Samsung Galaxy S24 S25 Ultra Armor Cover', 'CaseHouse Store', '9003', 95.8, 4180, '4.60', '12.80', '8.5%'),
+  p('1005007111888999', 'Magnetic Case for Samsung Galaxy S25 Ultra Clear Shockproof Ring Holder', 'ArmorLine Store', '9007', 97.1, 2960, '6.90', '18.00', '9.5%'),
+  p('1005007112000111', 'Clear Case for iPhone 15 Shockproof Transparent Slim Cover', 'ArmorLine Store', '9007', 97.1, 3310, '2.99', '8.50', '7.5%'),
+
+  // --- cables -------------------------------------------------------
+  p('1005007222111333', 'USB C Cable Fast Charging 100W Braided for Samsung Galaxy iPhone 2m', 'CableCraft Store', '9008', 96.5, 8940, '3.72', '9.99', '11.0%'),
+  p('1005007222444555', 'Lightning Cable Braided Fast Charging for iPhone 14 MFi 1.8m', 'CableCraft Store', '9008', 96.5, 5210, '4.15', '11.20', '10.0%'),
+  p('1005007222666777', 'USB C Cable Fast Charging 240W for iPhone 16 Pro Max Nylon Braided', 'CableCraft Store', '9008', 96.5, 3480, '5.30', '13.90', '10.5%'),
+
+  // --- power banks --------------------------------------------------
+  p('1005007333111444', 'Magnetic Power Bank 10000mAh Wireless for iPhone 16 Pro Max MagSafe', 'VoltHub Store', '9009', 97.8, 6120, '21.40', '48.00', '9.0%'),
+  p('1005007333555666', 'Power Bank 20000mAh Slim Fast Charging for Samsung Galaxy iPhone PD', 'VoltHub Store', '9009', 97.8, 4470, '17.90', '39.00', '8.5%'),
+
+  // --- mounts -------------------------------------------------------
+  p('1005007444111555', 'Magnetic Car Mount Phone Holder for iPhone 16 Pro Max Dashboard', 'DriveFit Store', '9010', 96.0, 7250, '6.20', '15.00', '10.0%'),
+  p('1005007444666777', 'Magnetic Car Mount Phone Holder for Samsung Galaxy S25 Ultra Vent Clip', 'DriveFit Store', '9010', 96.0, 3890, '5.80', '14.00', '9.5%'),
+  p('1005007444888999', 'Phone Stand Desk Aluminium Foldable for iPhone Samsung Galaxy Tablet', 'DriveFit Store', '9010', 96.0, 5030, '4.90', '12.50', '9.0%'),
+
+  // --- camera -------------------------------------------------------
+  p('1005007555111666', 'Camera Lens Protector Tempered Glass for iPhone 16 17 Pro Max 2 Pack', 'ProtectPro Store', '9002', 98.1, 4310, '3.40', '9.20', '11.5%'),
+  p('1005007555777888', 'Camera Lens Protector Metal Ring for Samsung Galaxy S25 Ultra', 'ShieldWorks Store', '9006', 96.2, 2140, '4.80', '11.90', '10.0%'),
+
+  // --- audio --------------------------------------------------------
+  p('1005007666111777', 'TWS Earbuds Bluetooth 5.4 for iPhone Samsung Galaxy Wireless ANC', 'SoundNest Store', '9011', 95.4, 9680, '16.30', '42.00', '11.0%'),
+  p('1005007666888999', 'Bluetooth Earphones ANC Noise Cancelling for Samsung Galaxy iPhone', 'SoundNest Store', '9011', 95.4, 3720, '22.50', '55.00', '10.0%'),
+
+  // --- deliberately rejectable ---------------------------------------
   {
     // Not a Choice listing, and the store sits below the quality bar — kept so
-    // the catalog filters have something real to reject.
+    // the curation filters have something real to reject.
     product_id: '1005007444555666',
-    product_title: 'Universal Phone Holder Car Mount Cheap',
+    product_title: 'Universal Phone Holder Car Mount Cheap Plastic',
     product_main_image_url: 'https://example-cdn.invalid/img/car-mount.jpg',
     product_detail_url: 'https://www.aliexpress.com/item/1005007444555666.html',
     sale_price: '1.99',
@@ -144,23 +146,54 @@ export const MOCK_PRODUCTS: RawProduct[] = [
     product_tags: [],
   },
   {
-    product_id: '1005007777888999',
-    product_title: '65W GaN Fast Charger USB C PD Adapter for iPhone Samsung Laptop',
-    product_main_image_url: 'https://example-cdn.invalid/img/gan-charger.jpg',
-    product_detail_url: 'https://www.aliexpress.com/item/1005007777888999.html',
-    original_price: '39.90',
-    sale_price: '18.76',
+    // Choice, well rated, but barely sold — the volume floor exists for this.
+    product_id: '1005007444777888',
+    product_title: 'Magnetic Case for iPhone 17 Pro Max Clear Shockproof New Release',
+    product_main_image_url: 'https://example-cdn.invalid/img/new-case.jpg',
+    product_detail_url: 'https://www.aliexpress.com/item/1005007444777888.html',
+    sale_price: '8.40',
     sale_price_currency: 'USD',
-    discount: '53%',
-    commission_rate: '10.0%',
-    first_level_category_id: '509',
-    shop_id: '9005',
-    shop_name: 'PowerMax Official Store',
-    evaluate_rate: '96.9',
-    lastest_volume: 7630,
-    product_tags: ['Choice', 'FreeShipping'],
+    commission_rate: '9.0%',
+    shop_id: '9003',
+    shop_name: 'CaseHouse Store',
+    evaluate_rate: '95.8',
+    lastest_volume: 24,
+    product_tags: ['Choice'],
   },
 ];
+
+/** Builds a Choice listing from a store that clears the quality bar. */
+function p(
+  id: string,
+  title: string,
+  shopName: string,
+  shopId: string,
+  rating: number,
+  volume: number,
+  salePrice: string,
+  originalPrice: string,
+  commission: string,
+): RawProduct {
+  return {
+    product_id: id,
+    product_title: title,
+    product_main_image_url: `https://example-cdn.invalid/img/${id}.jpg`,
+    product_detail_url: `https://www.aliexpress.com/item/${id}.html`,
+    original_price: originalPrice,
+    sale_price: salePrice,
+    target_sale_price: salePrice,
+    sale_price_currency: 'USD',
+    commission_rate: commission,
+    first_level_category_id: '509',
+    first_level_category_name: 'Phone Accessories',
+    shop_id: shopId,
+    shop_name: shopName,
+    shop_url: `https://www.aliexpress.com/store/${shopId}`,
+    evaluate_rate: String(rating),
+    lastest_volume: volume,
+    product_tags: ['Choice', 'FreeShipping'],
+  };
+}
 
 export const MOCK_ORDERS = [
   {
