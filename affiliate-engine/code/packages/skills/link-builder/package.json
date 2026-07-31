@@ -1,0 +1,16 @@
+{
+  "name": "@affiliate/link-builder",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SubID taxonomy, per-network encoding with lossless hash fallback, and tracking URL assembly.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run --root ../../..",
+    "typecheck": "tsc --noEmit -p ../../../tsconfig.base.json"
+  }
+}

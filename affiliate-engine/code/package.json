@@ -1,0 +1,25 @@
+{
+  "name": "affiliate-engine",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Affiliate portfolio operating system — attribution, unit economics, and time-allocation decisions",
+  "type": "module",
+  "workspaces": [
+    "packages/shared/*",
+    "packages/skills/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p tsconfig.base.json"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}

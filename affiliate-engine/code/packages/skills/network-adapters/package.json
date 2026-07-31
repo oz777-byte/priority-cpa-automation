@@ -1,0 +1,20 @@
+{
+  "name": "@affiliate/network-adapters",
+  "version": "0.1.0",
+  "private": true,
+  "description": "One shape for every network's commission report: CSV reader, column mapping, and SubID resolution.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run --root ../../..",
+    "typecheck": "tsc --noEmit -p ../../../tsconfig.base.json"
+  },
+  "dependencies": {
+    "@affiliate/link-builder": "*",
+    "@affiliate/offer-schema": "*"
+  }
+}

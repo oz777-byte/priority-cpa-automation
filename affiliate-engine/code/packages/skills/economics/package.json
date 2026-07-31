@@ -1,0 +1,19 @@
+{
+  "name": "@affiliate/economics",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Per-asset unit economics (EPC, CR, RPM, TimeROI) and the kill / hold / scale decision rules.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run --root ../../..",
+    "typecheck": "tsc --noEmit -p ../../../tsconfig.base.json"
+  },
+  "dependencies": {
+    "@affiliate/offer-schema": "*"
+  }
+}
