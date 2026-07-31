@@ -23,6 +23,8 @@ export interface Category {
   slug: string;
   nameHe: string;
   nameEn: string;
+  /** Singular noun, used to compose a product's Hebrew display title. */
+  nounHe: string;
   /** Short Hebrew description, used in meta descriptions and category intros. */
   blurbHe: string;
   queryTerms: string[];
@@ -66,6 +68,7 @@ export const CATEGORIES: Category[] = [
     slug: 'cases',
     nameHe: 'כיסויים',
     nameEn: 'Cases',
+    nounHe: 'כיסוי',
     blurbHe: 'כיסויים קשיחים, שקופים ומגנטיים — עמידות בנפילה והגנה על מצלמות.',
     queryTerms: ['case', 'shockproof case', 'clear case', 'magnetic case'],
     brands: [],
@@ -74,6 +77,7 @@ export const CATEGORIES: Category[] = [
     slug: 'screen-protectors',
     nameHe: 'מגני מסך',
     nameEn: 'Screen Protectors',
+    nounHe: 'מגן מסך',
     blurbHe: 'זכוכית מחוסמת, ציפוי אנטי-בוהק ומגני פרטיות — כולל מארזי רב-יחידות.',
     queryTerms: ['tempered glass screen protector', 'privacy screen protector'],
     brands: [],
@@ -82,6 +86,7 @@ export const CATEGORIES: Category[] = [
     slug: 'chargers',
     nameHe: 'מטענים',
     nameEn: 'Chargers',
+    nounHe: 'מטען',
     blurbHe: 'מטעני GaN מהירים, PD ומטענים אלחוטיים מגנטיים.',
     queryTerms: ['GaN charger USB C PD', 'wireless charger magnetic', 'fast charger adapter'],
     brands: [],
@@ -90,6 +95,7 @@ export const CATEGORIES: Category[] = [
     slug: 'cables',
     nameHe: 'כבלים',
     nameEn: 'Cables',
+    nounHe: 'כבל',
     blurbHe: 'כבלי USB-C, Lightning וכבלים מקולעים עם תמיכה בטעינה מהירה.',
     queryTerms: ['USB C cable fast charging', 'lightning cable braided'],
     brands: [],
@@ -98,6 +104,7 @@ export const CATEGORIES: Category[] = [
     slug: 'power-banks',
     nameHe: 'סוללות ניידות',
     nameEn: 'Power Banks',
+    nounHe: 'סוללה ניידת',
     blurbHe: 'סוללות ניידות מגנטיות וקומפקטיות לטעינה מלאה בדרכים.',
     queryTerms: ['power bank magnetic', 'power bank 20000mah slim'],
     brands: [],
@@ -106,6 +113,7 @@ export const CATEGORIES: Category[] = [
     slug: 'audio',
     nameHe: 'אוזניות ושמע',
     nameEn: 'Audio',
+    nounHe: 'אוזניות',
     blurbHe: 'אוזניות TWS, מתאמי שמע ואביזרים נלווים.',
     queryTerms: ['TWS earbuds', 'bluetooth earphones ANC'],
     brands: [],
@@ -114,6 +122,7 @@ export const CATEGORIES: Category[] = [
     slug: 'mounts',
     nameHe: 'מעמדים ומחזיקים',
     nameEn: 'Mounts',
+    nounHe: 'מעמד',
     blurbHe: 'מחזיקי רכב מגנטיים, מעמדים שולחניים וחצובות.',
     queryTerms: ['magnetic car mount phone holder', 'phone stand desk'],
     brands: [],
@@ -122,6 +131,7 @@ export const CATEGORIES: Category[] = [
     slug: 'camera',
     nameHe: 'צילום ומצלמה',
     nameEn: 'Camera',
+    nounHe: 'מגן עדשה',
     blurbHe: 'מגני עדשות, עדשות נשלפות ותאורה לצילום נייד.',
     queryTerms: ['camera lens protector', 'phone lens kit'],
     brands: ['iphone', 'samsung'],

@@ -201,8 +201,20 @@ h2 { font-size: 19px; font-weight: 700; letter-spacing: -.01em; margin: 34px 0 1
 
 .product .info { padding: 12px 13px 13px; display: flex; flex-direction: column; gap: 7px; flex: 1; }
 .product .name {
-  font-size: 13.5px; font-weight: 600; line-height: 1.45;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  font-size: 14.5px; font-weight: 700; line-height: 1.4;
+  margin: 0;
+  text-wrap: balance;
+}
+.product .source-title {
+  margin: -2px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  /* One line only: it is a matching aid, not the headline. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .price { display: flex; align-items: baseline; gap: 8px; font-variant-numeric: tabular-nums; }
 .price .now { font-size: 19px; font-weight: 700; font-family: var(--mono); }

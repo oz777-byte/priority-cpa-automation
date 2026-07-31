@@ -8,10 +8,12 @@ import {
   breadcrumbJsonLd,
   buildCategoryMeta,
   buildSitemap,
+  composeHebrewTitle,
   curateCatalog,
   curateProduct,
   dedupeProducts,
   enumeratePages,
+  hebrewTitleForPage,
   itemListJsonLd,
   listingValue,
   normalizeProduct,
@@ -243,6 +245,77 @@ describe('taxonomy', () => {
     const slugs = enumeratePages().map((page) => page.slug);
     expect(new Set(slugs).size).toBe(slugs.length);
     expect(slugs.every((slug) => /^[a-z0-9-]+$/.test(slug))).toBe(true);
+  });
+});
+
+describe('hebrew display titles', () => {
+  const casesIphone16Pro = enumeratePages().find((p) => p.slug === 'cases-iphone-16-pro')!;
+  const glassPage = enumeratePages().find((p) => p.slug === 'screen-protectors-galaxy-s25-ultra')!;
+  const chargerPage = enumeratePages().find((p) => p.slug === 'chargers-iphone')!;
+
+  it('rebuilds a marketplace title from recognised parts', () => {
+    // Source: "Magnetic Clear Case for iPhone 16 Pro MagSafe Shockproof Slim
+    // Cover". Four attributes match; the two that tell a shopper the most win.
+    const product = normalizeProduct(raw('1005007111444555'));
+    expect(hebrewTitleForPage(product, casesIphone16Pro)).toBe(
+      'כיסוי מגנטי נגד זעזועים לאייפון 16 Pro',
+    );
+  });
+
+  it('keeps the spec a buyer compares on', () => {
+    const product = normalizeProduct(raw(GLASS));
+    expect(hebrewTitleForPage(product, glassPage)).toBe(
+      'מגן מסך זכוכית מחוסמת לגלקסי S25 Ultra 3 יחידות',
+    );
+  });
+
+  it('puts a hardware rating before the device, where it reads naturally', () => {
+    const product = normalizeProduct(raw(GAN));
+    expect(hebrewTitleForPage(product, chargerPage)).toBe('מטען GaN 65W לאייפון');
+  });
+
+  it('drops "fast charging" when a wattage already says it', () => {
+    expect(
+      composeHebrewTitle('33W Fast Charger Adapter PD Wall Plug', {
+        nounHe: 'מטען',
+        deviceHe: 'אייפון 16 Pro Max',
+      }),
+    ).toBe('מטען 33W לאייפון 16 Pro Max');
+  });
+
+  it('keeps a pack count at the end, where it describes the package', () => {
+    expect(
+      composeHebrewTitle('Tempered Glass Screen Protector 3 Pack', {
+        nounHe: 'מגן מסך',
+        deviceHe: 'אייפון 16',
+      }),
+    ).toBe('מגן מסך זכוכית מחוסמת לאייפון 16 3 יחידות');
+  });
+
+  it('drops what it does not recognise instead of guessing', () => {
+    // Anything not in the lexicon is left out. A machine translation of
+    // marketplace keyword soup is exactly the pattern that reads as scraped
+    // spam, so the title is composed rather than translated.
+    const title = composeHebrewTitle('Super Deluxe Widget XYZ Unbranded', {
+      nounHe: 'כיסוי',
+      deviceHe: 'אייפון 16',
+    });
+    expect(title).toBe('כיסוי לאייפון 16');
+  });
+
+  it('caps how many attributes it stacks', () => {
+    const title = composeHebrewTitle(
+      'Magnetic Clear Shockproof Slim Braided Foldable Case',
+      { nounHe: 'כיסוי', deviceHe: 'אייפון 16' },
+    );
+    expect(title.split(' ').length).toBeLessThanOrEqual(7);
+  });
+
+  it('is deterministic', () => {
+    const product = normalizeProduct(raw(GLASS));
+    expect(hebrewTitleForPage(product, glassPage)).toBe(
+      hebrewTitleForPage(product, glassPage),
+    );
   });
 });
 

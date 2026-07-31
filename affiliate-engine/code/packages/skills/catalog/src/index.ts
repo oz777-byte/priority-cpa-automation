@@ -17,6 +17,9 @@ export {
   titleFingerprint,
 } from './curate';
 
+export type { HebrewTitleOptions } from './title';
+export { composeHebrewTitle, hebrewTitleForPage } from './title';
+
 export type { Brand, Category, CategoryBrandPage } from './taxonomy';
 export { BRANDS, CATEGORIES, enumeratePages, findBrand, findCategory } from './taxonomy';
 

@@ -1,4 +1,5 @@
-import type { CatalogProduct } from '@affiliate/catalog';
+import type { CatalogProduct, CategoryBrandPage } from '@affiliate/catalog';
+import { hebrewTitleForPage } from '@affiliate/catalog';
 import { isPreview } from '../lib/site';
 import { subIdFor } from '../lib/catalog';
 
@@ -40,15 +41,16 @@ const GLYPHS: Record<string, React.ReactNode> = {
 
 export function ProductCard({
   product,
-  pageSlug,
-  categorySlug,
+  page,
   position,
 }: {
   product: CatalogProduct;
-  pageSlug: string;
-  categorySlug: string;
+  page: CategoryBrandPage;
   position: number;
 }) {
+  const categorySlug = page.category.slug;
+  const pageSlug = page.slug;
+  const titleHe = hebrewTitleForPage(product, page);
   const price = product.salePriceMinor !== null ? (product.salePriceMinor / 100).toFixed(2) : null;
   const was =
     product.originalPriceMinor !== null && product.originalPriceMinor > (product.salePriceMinor ?? 0)
@@ -71,7 +73,12 @@ export function ProductCard({
       </div>
 
       <div className="info">
-        <h3 className="name">{product.title}</h3>
+        <h3 className="name">{titleHe}</h3>
+        {/* The marketplace title stays visible so a shopper can match this
+            card against the listing they land on. */}
+        <p className="source-title" lang="en" dir="ltr">
+          {product.title}
+        </p>
 
         {price && (
           <p className="price">

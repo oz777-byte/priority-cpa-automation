@@ -99,8 +99,7 @@ export default async function CategoryPage({ params }: { params: Promise<Params>
           <ProductCard
             key={product.productId}
             product={product}
-            pageSlug={entry.page.slug}
-            categorySlug={category}
+            page={entry.page}
             position={index + 1}
           />
         ))}
