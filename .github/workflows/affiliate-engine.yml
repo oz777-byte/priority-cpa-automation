@@ -20,7 +20,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # The catalog sync runs TypeScript directly, which needs the type
+          # stripping that is on by default from 22.18. Node 20 fails on it.
+          node-version: '22'
       - run: npm install --no-audit --no-fund
       - run: npm run typecheck
       - run: npm test

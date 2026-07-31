@@ -17,7 +17,7 @@
     "dev:storefront": "npm run dev --workspace apps/storefront"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.18"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

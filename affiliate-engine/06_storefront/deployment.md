@@ -38,7 +38,10 @@
    ה-`vercel.json` שם כבר מגדיר framework, build command וכותרות אבטחה.
    האתר אינו static export יותר — `/go/{token}` דורש runtime. כל עמודי הקטלוג עדיין
    מרונדרים מראש, אז ההוצאה והביצועים לא משתנים; רק ה-redirect דינמי.
-3. **Environment Variables** — הדבק:
+3. **Node.js Version**: 22 או חדש יותר.
+   סנכרון הקטלוג מריץ TypeScript ישירות, מה שדורש type stripping שקיים כברירת מחדל מ-22.18.
+   `engines` ב-`package.json` מצהיר על זה, ו-Vercel קורא משם — אבל שווה לוודא בהגדרות.
+4. **Environment Variables** — הדבק:
 
 ```
 NEXT_PUBLIC_SITE_URL      = https://הדומיין-שלך.com
@@ -51,7 +54,7 @@ CLICK_IP_SALT             = מחרוזת אקראית ארוכה
 `CLICK_IP_SALT` הוא סוד. בלעדיו לא נשמר hash של IP כלל — ברירת מחדל בטוחה, אבל מאבדת
 זיהוי קליקים חוזרים. **אל תשתמש בערך שאפשר לנחש.**
 
-4. **Deploy**
+5. **Deploy**
 
 ⚠️ `NEXT_PUBLIC_SITE_URL` חייב להיות מדויק וללא `/` בסוף. הוא מזין canonical URLs ואת ה-sitemap — ערך שגוי מרעיל בשקט כל אות SEO באתר.
 
