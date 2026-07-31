@@ -6,8 +6,8 @@ import {
   daysBetween,
   rankRecommendations,
   recommendAction,
-} from '../src/index';
-import type { AssetInput } from '../src/index';
+} from '../src/index.ts';
+import type { AssetInput } from '../src/index.ts';
 
 const TODAY = '2026-07-31';
 

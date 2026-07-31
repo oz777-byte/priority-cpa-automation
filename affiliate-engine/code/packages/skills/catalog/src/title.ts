@@ -1,5 +1,5 @@
-import type { CatalogProduct } from './normalize';
-import type { CategoryBrandPage } from './taxonomy';
+import type { CatalogProduct } from './normalize.ts';
+import type { CategoryBrandPage } from './taxonomy.ts';
 
 /**
  * Hebrew display titles, composed from a controlled template.

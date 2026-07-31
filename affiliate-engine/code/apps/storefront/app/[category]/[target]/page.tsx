@@ -13,8 +13,8 @@ type Params = { category: string; target: string };
  * not worth publishing in any mode, and a build that silently produced dozens
  * of them would be indistinguishable from a working one.
  */
-export async function generateStaticParams(): Promise<Params[]> {
-  const pages = await publishablePages();
+export function generateStaticParams(): Params[] {
+  const pages = publishablePages();
   return pages.map((entry) => ({
     category: entry.page.category.slug,
     target: entry.page.model?.slug ?? entry.page.brand.slug,
@@ -27,7 +27,7 @@ export async function generateMetadata({
   params: Promise<Params>;
 }): Promise<Metadata> {
   const { category, target } = await params;
-  const entry = await getPage(category, target);
+  const entry = getPage(category, target);
   if (!entry) return {};
 
   const cheapest = entry.products
@@ -50,7 +50,7 @@ export async function generateMetadata({
 
 export default async function CategoryPage({ params }: { params: Promise<Params> }) {
   const { category, target } = await params;
-  const entry = await getPage(category, target);
+  const entry = getPage(category, target);
   if (!entry || entry.products.length === 0) notFound();
 
   const url = `${site.baseUrl}/${category}/${target}`;

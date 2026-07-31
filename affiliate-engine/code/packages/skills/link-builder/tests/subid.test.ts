@@ -7,7 +7,7 @@ import {
   isHashedToken,
   parseSubId,
   toSegment,
-} from '../src/index';
+} from '../src/index.ts';
 
 describe('toSegment', () => {
   it('slugifies free text', () => {

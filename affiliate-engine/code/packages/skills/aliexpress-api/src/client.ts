@@ -1,5 +1,5 @@
-import { formatTimestamp, signRequest } from './sign';
-import type { SignMethod } from './sign';
+import { formatTimestamp, signRequest } from './sign.ts';
+import type { SignMethod } from './sign.ts';
 import type {
   LinkGenerateResult,
   OrderListResult,
@@ -7,8 +7,8 @@ import type {
   ProductQueryResult,
   RawOrder,
   RawProduct,
-} from './types';
-import { AliExpressApiError } from './types';
+} from './types.ts';
+import { AliExpressApiError } from './types.ts';
 
 export const DEFAULT_GATEWAY = 'https://api-sg.aliexpress.com/sync';
 

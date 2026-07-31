@@ -1,6 +1,6 @@
-import { createGenericCsvAdapter } from './generic-csv';
-import type { NetworkAdapter } from './types';
-import { AdapterError } from './types';
+import { createGenericCsvAdapter } from './generic-csv.ts';
+import type { NetworkAdapter } from './types.ts';
+import { AdapterError } from './types.ts';
 
 /**
  * Adapters shipped out of the box. Each one is a column mapping over the

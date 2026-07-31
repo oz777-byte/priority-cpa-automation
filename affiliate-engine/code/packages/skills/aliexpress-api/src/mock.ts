@@ -1,5 +1,5 @@
-import type { Transport } from './client';
-import type { RawProduct } from './types';
+import type { Transport } from './client.ts';
+import type { RawProduct } from './types.ts';
 
 /**
  * Fixture transport, so the storefront and the catalog pipeline can be built

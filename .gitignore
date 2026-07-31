@@ -33,3 +33,6 @@ npm-debug.log*
 
 # Static export output
 **/out/
+
+# Catalog sync artifacts
+**/apps/storefront/data/

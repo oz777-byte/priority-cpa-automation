@@ -1,4 +1,4 @@
-export type { EncodedSubId, SubIdEncoding, SubIdParts } from './subid';
+export type { EncodedSubId, SubIdEncoding, SubIdParts } from './subid.ts';
 export {
   CANONICAL_SEPARATOR,
   HASH_TOKEN_LENGTH,
@@ -11,21 +11,21 @@ export {
   isHashedToken,
   parseSubId,
   toSegment,
-} from './subid';
+} from './subid.ts';
 
-export type { NetworkProfile } from './networks';
+export type { NetworkProfile } from './networks.ts';
 export {
   DEFAULT_PROFILE,
   NETWORK_PROFILES,
   UnverifiedProfileError,
   assertProfileVerified,
   getNetworkProfile,
-} from './networks';
+} from './networks.ts';
 
 export type {
   ResolveFailureReason,
   ResolvedSubId,
   TrackingLink,
   TrackingLinkInput,
-} from './build';
-export { buildTrackingLink, encodeSubId, resolveSubId } from './build';
+} from './build.ts';
+export { buildTrackingLink, encodeSubId, resolveSubId } from './build.ts';

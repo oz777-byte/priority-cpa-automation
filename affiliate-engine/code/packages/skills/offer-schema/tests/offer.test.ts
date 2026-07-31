@@ -13,8 +13,8 @@ import {
   normalizeOffer,
   percentOfMinor,
   toMinor,
-} from '../src/index';
-import type { OfferInput } from '../src/index';
+} from '../src/index.ts';
+import type { OfferInput } from '../src/index.ts';
 
 const baseInput: OfferInput = {
   slug: 'monday-crm',

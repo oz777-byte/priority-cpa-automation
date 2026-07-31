@@ -10,7 +10,7 @@ import {
   getNetworkProfile,
   hashToken,
   resolveSubId,
-} from '../src/index';
+} from '../src/index.ts';
 
 const shortParts = { asset: 'guide', placement: 'hero-cta' };
 

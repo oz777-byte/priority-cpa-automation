@@ -1,6 +1,6 @@
 # Deployment — העלאה לדומיין
 
-**מצב נוכחי**: האתר בנוי ונבנה בהצלחה — 100 עמודים סטטיים. הוא **לא נפרס** כי אין לי את הדומיין שלך ואין לי גישה לחשבון Vercel שלך.
+**מצב נוכחי**: האתר בנוי ונבנה בהצלחה — 100 עמודים, מתוכם 99 מרונדרים מראש ו-`/go/{token}` דינמי. הוא **לא נפרס** כי אין לי את הדומיין שלך ואין לי גישה לחשבון Vercel שלך.
 
 מה שנשאר הוא שלושה צעדים של העתק-הדבק, כ-15 דקות.
 
@@ -35,7 +35,9 @@
 
 1. Vercel → **Add New → Project** → בחר `oz777-byte/priority-cpa-automation`
 2. **Root Directory**: `affiliate-engine/code`
-   ה-`vercel.json` שם כבר מגדיר build command, output directory וכותרות אבטחה.
+   ה-`vercel.json` שם כבר מגדיר framework, build command וכותרות אבטחה.
+   האתר אינו static export יותר — `/go/{token}` דורש runtime. כל עמודי הקטלוג עדיין
+   מרונדרים מראש, אז ההוצאה והביצועים לא משתנים; רק ה-redirect דינמי.
 3. **Environment Variables** — הדבק:
 
 ```
@@ -43,7 +45,11 @@ NEXT_PUBLIC_SITE_URL      = https://הדומיין-שלך.com
 NEXT_PUBLIC_SITE_NAME     = OS Tech Ventures
 NEXT_PUBLIC_DATA_MODE     = preview
 NEXT_PUBLIC_CONTACT_EMAIL = המייל-שלך
+CLICK_IP_SALT             = מחרוזת אקראית ארוכה
 ```
+
+`CLICK_IP_SALT` הוא סוד. בלעדיו לא נשמר hash של IP כלל — ברירת מחדל בטוחה, אבל מאבדת
+זיהוי קליקים חוזרים. **אל תשתמש בערך שאפשר לנחש.**
 
 4. **Deploy**
 
@@ -99,7 +105,8 @@ cd affiliate-engine/code
 npm install
 cp .env.example .env.local        # ערוך את NEXT_PUBLIC_SITE_URL
 npm run dev:storefront            # http://localhost:3000
-npm run build:storefront          # ייצוא סטטי ל-apps/storefront/out
+npm run build:storefront          # סנכרון קטלוג + בנייה
+cd apps/storefront && npx next start  # לבדיקת ה-redirect מקומית
 ```
 
 ---
@@ -121,9 +128,9 @@ Hobby של Vercel מוגבל לשימוש לא-מסחרי. אתר אפילייט
 
 | רכיב | סטטוס |
 |---|---|
-| סנכרון קטלוג אוטומטי | לא נבנה — הקטלוג נבנה בזמן build |
-| שירות redirect `/go/{slug}` | לא נבנה — נדרש לרישום קליקים |
+| סנכרון קטלוג אוטומטי | ידני (`npm run sync`) — טרם מתוזמן ב-cron |
+| שירות redirect `/go/{token}` | ✅ נבנה ונבדק — ראה `redirect_service.md` |
 | קונסולת ההחלטות כאתר | קיימת כאב-טיפוס בלבד |
 | Proxy לתמונות | לא נבנה — כרגע אייקון קטגוריה במקום תמונה |
 
-הפער האמיתי הוא **שירות ה-redirect**: בלעדיו לינק נספר ע"י המרקטפלייס אבל לא אצלנו, כלומר יש עמלות ואין EPC לכל עמוד. זה הצעד ההנדסי הבא.
+הפער האמיתי עכשיו הוא **הרצת המיגרציות מול Supabase**: ה-redirect רושם קליקים, אבל בלי הטבלאות אין לאן לכתוב אותם.

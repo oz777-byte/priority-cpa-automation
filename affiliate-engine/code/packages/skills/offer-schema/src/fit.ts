@@ -1,5 +1,5 @@
-import type { Offer } from './types';
-import { percentOfMinor } from './money';
+import type { Offer } from './types.ts';
+import { percentOfMinor } from './money.ts';
 
 /**
  * Portfolio admission criteria. Thresholds are configuration, never

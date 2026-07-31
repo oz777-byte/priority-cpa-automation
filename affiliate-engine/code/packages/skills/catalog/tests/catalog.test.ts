@@ -23,8 +23,8 @@ import {
   shouldIndex,
   titleFingerprint,
   toLatinSlug,
-} from '../src/index';
-import type { CatalogProduct } from '../src/index';
+} from '../src/index.ts';
+import type { CatalogProduct } from '../src/index.ts';
 
 /** Fixtures are looked up by id, so adding products never shifts a test. */
 const raw = (id: string) => MOCK_PRODUCTS.find((p) => String(p.product_id) === id)!;

@@ -4,9 +4,10 @@
   "private": true,
   "description": "OS Tech Ventures storefront — statically generated Hebrew accessory catalog.",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "npx serve out"
+    "sync": "node --experimental-strip-types scripts/sync-catalog.ts",
+    "dev": "npm run sync && next dev",
+    "build": "npm run sync && next build",
+    "start": "next start"
   },
   "dependencies": {
     "@affiliate/aliexpress-api": "*",
@@ -19,5 +20,6 @@
   "devDependencies": {
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3"
-  }
+  },
+  "type": "module"
 }

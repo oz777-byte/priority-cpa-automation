@@ -5,19 +5,19 @@ export type {
   NetworkAdapter,
   NormalizedConversion,
   RowError,
-} from './types';
-export { AdapterError } from './types';
+} from './types.ts';
+export { AdapterError } from './types.ts';
 
-export type { CsvTable } from './csv';
-export { normalizeHeader, parseCsv, pick, toTable } from './csv';
+export type { CsvTable } from './csv.ts';
+export { normalizeHeader, parseCsv, pick, toTable } from './csv.ts';
 
-export type { ColumnMap, GenericCsvOptions } from './generic-csv';
+export type { ColumnMap, GenericCsvOptions } from './generic-csv.ts';
 export {
   DEFAULT_COLUMNS,
   createGenericCsvAdapter,
   mapStatus,
   parseDate,
   parseMoney,
-} from './generic-csv';
+} from './generic-csv.ts';
 
-export { getAdapter, listAdapters, registerAdapter } from './registry';
+export { getAdapter, listAdapters, registerAdapter } from './registry.ts';

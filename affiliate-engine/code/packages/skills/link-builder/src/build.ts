@@ -1,6 +1,6 @@
-import type { NetworkProfile } from './networks';
-import { getNetworkProfile } from './networks';
-import type { EncodedSubId, SubIdParts } from './subid';
+import type { NetworkProfile } from './networks.ts';
+import { getNetworkProfile } from './networks.ts';
+import type { EncodedSubId, SubIdParts } from './subid.ts';
 import {
   CANONICAL_SEPARATOR,
   HASH_TOKEN_LENGTH,
@@ -9,7 +9,7 @@ import {
   hashToken,
   isHashedToken,
   parseSubId,
-} from './subid';
+} from './subid.ts';
 
 export interface TrackingLinkInput {
   /** Destination the network expects us to send traffic to. */

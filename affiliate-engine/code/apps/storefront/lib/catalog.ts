@@ -1,112 +1,90 @@
-import { createAliExpressClient, createMockTransport } from '@affiliate/aliexpress-api';
-import type { RawProduct } from '@affiliate/aliexpress-api';
-import {
-  curateCatalog,
-  dedupeProducts,
-  enumeratePages,
-  normalizeProducts,
-  rankProducts,
-} from '@affiliate/catalog';
 import type { CatalogProduct, CategoryBrandPage } from '@affiliate/catalog';
-import { dataMode } from './site';
+import { findBrand, findCategory } from '@affiliate/catalog';
+import catalogData from '../data/catalog.json';
+import linkData from '../data/links.json';
 
 /**
- * Builds the whole storefront catalog once, at build time.
- *
- * The same code path serves both modes: with credentials it queries the live
- * gateway, without them it queries the fixture transport. Nothing downstream
- * knows which, which is what lets the site be built, styled and deployed
- * before the affiliate account is approved.
+ * Read side of the catalog: the site and the redirect both load the artifact
+ * the sync step wrote. Nothing here talks to the marketplace.
  */
 
-const transport =
-  dataMode === 'live' && process.env.ALIEXPRESS_APP_KEY
-    ? liveTransport()
-    : createMockTransport();
+export interface StoredProduct extends CatalogProduct {
+  placement: string;
+  linkToken: string;
+  /** Precomputed so a card never has to reconstruct it from its position. */
+  subId: string;
+}
 
-const client = createAliExpressClient({
-  appKey: process.env.ALIEXPRESS_APP_KEY ?? 'preview',
-  appSecret: process.env.ALIEXPRESS_APP_SECRET ?? 'preview',
-  trackingId: process.env.ALIEXPRESS_TRACKING_ID ?? 'preview',
-  now: () => Date.now(),
-  transport,
-  defaults: { shipToCountry: 'IL', targetCurrency: 'USD', targetLanguage: 'HE' },
-});
+interface StoredPage {
+  slug: string;
+  categorySlug: string;
+  brandSlug: string;
+  modelSlug: string | null;
+  titleHe: string;
+  rejectionCounts: Record<string, number>;
+  products: StoredProduct[];
+}
 
-function liveTransport() {
-  return async (url: string, body: string): Promise<unknown> => {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body,
-    });
-    return response.json();
-  };
+export interface LinkEntry {
+  token: string;
+  assetSlug: string;
+  placement: string;
+  productId: string;
+  subId: string;
+  targetUrl: string;
 }
 
 export interface BuiltPage {
   page: CategoryBrandPage;
-  products: CatalogProduct[];
-  /** Rejection tally, surfaced in the console so a broken filter is visible. */
+  products: StoredProduct[];
   rejectionCounts: Record<string, number>;
 }
 
-let cache: Map<string, BuiltPage> | null = null;
-
-export async function buildCatalog(): Promise<Map<string, BuiltPage>> {
-  if (cache) return cache;
-
-  const built = new Map<string, BuiltPage>();
-
-  for (const page of enumeratePages()) {
-    const raws: RawProduct[] = [];
-
-    for (const term of page.queryTerms) {
-      const result = await client.queryProducts({ keywords: term, pageSize: 40 });
-      raws.push(...result.products);
-    }
-
-    // The same listing answers several search terms, so it arrives more than
-    // once; keep the first sighting of each id before anything else runs.
-    const unique = new Map<string, RawProduct>();
-    for (const raw of raws) {
-      const id = raw.product_id !== undefined ? String(raw.product_id) : '';
-      if (id && !unique.has(id)) unique.set(id, raw);
-    }
-
-    const { products } = normalizeProducts([...unique.values()]);
-    const curated = curateCatalog(products);
-    const ranked = rankProducts(dedupeProducts(curated.admitted));
-
-    built.set(page.slug, {
-      page,
-      products: ranked,
-      rejectionCounts: curated.rejectionCounts,
-    });
-  }
-
-  cache = built;
-  return built;
-}
-
-/** Pages worth emitting at all. An empty page is not published in any mode. */
-export async function publishablePages(): Promise<BuiltPage[]> {
-  const catalog = await buildCatalog();
-  return [...catalog.values()].filter((entry) => entry.products.length > 0);
-}
-
-export async function getPage(
-  categorySlug: string,
-  targetSlug: string,
-): Promise<BuiltPage | undefined> {
-  const catalog = await buildCatalog();
-  return catalog.get(`${categorySlug}-${targetSlug}`);
-}
+const stored = catalogData as { pages: StoredPage[] };
+export const links = linkData as Record<string, LinkEntry>;
 
 /**
- * The SubID a click on this slot will carry. Rendered on the page in preview
- * mode so the attribution chain is visible end to end before it is live.
+ * Rebuilds the taxonomy objects the renderer wants from the slugs the artifact
+ * stores. Storing slugs rather than the whole taxonomy keeps the artifact small
+ * and means a wording change in a category name does not require a resync.
  */
-export function subIdFor(pageSlug: string, position: number): string {
-  return `${pageSlug}.table-row-${position}`;
+function hydrate(page: StoredPage): BuiltPage | null {
+  const category = findCategory(page.categorySlug);
+  const brand = findBrand(page.brandSlug);
+  if (!category || !brand) return null;
+
+  const model = page.modelSlug
+    ? brand.models.find((candidate) => candidate.slug === page.modelSlug)
+    : undefined;
+
+  return {
+    page: {
+      slug: page.slug,
+      titleHe: page.titleHe,
+      category,
+      brand,
+      ...(model ? { model } : {}),
+      queryTerms: [],
+    },
+    products: page.products,
+    rejectionCounts: page.rejectionCounts,
+  };
+}
+
+const bySlug = new Map<string, BuiltPage>();
+for (const page of stored.pages) {
+  const built = hydrate(page);
+  if (built) bySlug.set(page.slug, built);
+}
+
+export function publishablePages(): BuiltPage[] {
+  return [...bySlug.values()];
+}
+
+export function getPage(categorySlug: string, targetSlug: string): BuiltPage | undefined {
+  return bySlug.get(`${categorySlug}-${targetSlug}`);
+}
+
+export function getLink(token: string): LinkEntry | undefined {
+  return links[token];
 }

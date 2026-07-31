@@ -1,6 +1,6 @@
-import type { Offer, OfferInput, ValidationIssue } from './types';
-import { OfferValidationError } from './types';
-import { assertMinor } from './money';
+import type { Offer, OfferInput, ValidationIssue } from './types.ts';
+import { OfferValidationError } from './types.ts';
+import { assertMinor } from './money.ts';
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;

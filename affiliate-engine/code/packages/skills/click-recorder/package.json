@@ -1,0 +1,16 @@
+{
+  "name": "@affiliate/click-recorder",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Privacy-minimised click recording for the redirect service: IP hashing, bot filtering, rate limiting.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run --root ../../..",
+    "typecheck": "tsc --noEmit -p ../../../tsconfig.base.json"
+  }
+}

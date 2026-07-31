@@ -3,8 +3,8 @@ import { CATEGORIES } from '@affiliate/catalog';
 import { publishablePages } from '../lib/catalog';
 import { site } from '../lib/site';
 
-export default async function HomePage() {
-  const pages = await publishablePages();
+export default function HomePage() {
+  const pages = publishablePages();
 
   const byCategory = CATEGORIES.map((category) => {
     const entries = pages.filter((entry) => entry.page.category.slug === category.slug);

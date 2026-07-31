@@ -10,7 +10,7 @@ import {
   parseDate,
   parseMoney,
   toTable,
-} from '../src/index';
+} from '../src/index.ts';
 
 describe('parseCsv', () => {
   it('handles quoted commas and embedded newlines', () => {

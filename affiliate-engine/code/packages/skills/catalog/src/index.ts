@@ -1,12 +1,12 @@
-export type { CatalogProduct, NormalizeOptions } from './normalize';
+export type { CatalogProduct, NormalizeOptions } from './normalize.ts';
 export {
   DEFAULT_CHOICE_TAGS,
   NormalizeError,
   normalizeProduct,
   normalizeProducts,
-} from './normalize';
+} from './normalize.ts';
 
-export type { CurationResult, CurationRules, CurationVerdict, RejectReason } from './curate';
+export type { CurationResult, CurationRules, CurationVerdict, RejectReason } from './curate.ts';
 export {
   DEFAULT_CURATION_RULES,
   curateCatalog,
@@ -15,15 +15,15 @@ export {
   listingValue,
   rankProducts,
   titleFingerprint,
-} from './curate';
+} from './curate.ts';
 
-export type { HebrewTitleOptions } from './title';
-export { composeHebrewTitle, hebrewTitleForPage } from './title';
+export type { HebrewTitleOptions } from './title.ts';
+export { composeHebrewTitle, hebrewTitleForPage } from './title.ts';
 
-export type { Brand, Category, CategoryBrandPage } from './taxonomy';
-export { BRANDS, CATEGORIES, enumeratePages, findBrand, findCategory } from './taxonomy';
+export type { Brand, Category, CategoryBrandPage } from './taxonomy.ts';
+export { BRANDS, CATEGORIES, enumeratePages, findBrand, findCategory } from './taxonomy.ts';
 
-export type { JsonLd, PageMeta, SiteConfig, SitemapEntry } from './seo';
+export type { JsonLd, PageMeta, SiteConfig, SitemapEntry } from './seo.ts';
 export {
   breadcrumbJsonLd,
   buildCategoryMeta,
@@ -32,4 +32,4 @@ export {
   productJsonLd,
   shouldIndex,
   toLatinSlug,
-} from './seo';
+} from './seo.ts';

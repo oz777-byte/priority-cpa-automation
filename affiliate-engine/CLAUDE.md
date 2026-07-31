@@ -63,10 +63,11 @@ npm run typecheck
 
 ## מצב נוכחי
 
-- ✅ **M1 Skills Foundation** — 6 skills, 173 טסטים עוברים, typecheck נקי
+- ✅ **M1 Skills Foundation** — 7 skills, 202 טסטים עוברים, typecheck נקי
 - ✅ סכמות DB עם RLS: `0001_affiliate_schema.sql` (ליבה) + `0002_catalog.sql` (חנות) — **טרם הורצו מול Supabase**
 - ✅ אב-טיפוס ויזואלי: `06_storefront/prototype.html`
-- ⬜ M2 Data Layer · M3 Redirect · M4 Ingest · M5 Dashboard
+- ✅ **M3 Redirect** — `/go/{token}` בנוי ונבדק מקצה לקצה (`06_storefront/redirect_service.md`)
+- ⬜ M2 Data Layer · M4 Ingest · M5 Dashboard
 
 **המוצר (31/07/2026)**: חנות אביזרי סלולר לאייפון וסמסונג בשם **OS Tech Ventures** — AliExpress Choice בלבד, מחנויות מדורגות, SEO אורגני בעברית, אפילייט טהור ללא מלאי.
 האפיון: `06_storefront/storefront_spec.md` · `06_storefront/api_integration.md` · `05_implementation/validation_sprint.md`.
@@ -79,5 +80,7 @@ npm run typecheck
 3. **slug של עמוד הוא לטיני, לא עברי.** ה-slug הופך למקטע הראשון ב-SubID שחייב להתאים ל-`[a-z0-9-]`. slug עברי הופך כל קליק בעמוד לבלתי ניתן לייחוס.
 4. **אין דירוג מוצר ב-JSON-LD.** למרקטפלייס יש דירוג *מוכר*. הצגתו כדירוג מוצר היא הפרת structured data וגם טענה שקרית לקונה.
 5. **אין מפתחות API?** `createMockTransport()` — כל הצנרת נבנית ונבדקת בלעדיהם.
+6. **קליק של בוט נזרק, לא נשמר עם דגל.** שאילתה שתשכח לסנן תדווח EPC מדולל שמצדיק להרוג עמוד עובד.
+7. **הרישום קורה ב-`after()`, אחרי התשובה.** כישלון ברישום עולה שורת דיווח; המתנה של המבקר עולה את המכירה.
 
 **חוסם את שלב 2**: D1 (הנישה הכלכלית) עדיין פתוחה ב-`open_decisions.md`.

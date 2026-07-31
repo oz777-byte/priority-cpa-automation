@@ -1,7 +1,7 @@
-import type { CatalogProduct, CategoryBrandPage } from '@affiliate/catalog';
+import type { CategoryBrandPage } from '@affiliate/catalog';
 import { hebrewTitleForPage } from '@affiliate/catalog';
+import type { StoredProduct } from '../lib/catalog';
 import { isPreview } from '../lib/site';
-import { subIdFor } from '../lib/catalog';
 
 /**
  * Marketplace image CDNs rewrite and expire URLs, and hotlinking them leaves
@@ -44,7 +44,7 @@ export function ProductCard({
   page,
   position,
 }: {
-  product: CatalogProduct;
+  product: StoredProduct;
   page: CategoryBrandPage;
   position: number;
 }) {
@@ -57,7 +57,7 @@ export function ProductCard({
       ? (product.originalPriceMinor / 100).toFixed(2)
       : null;
 
-  const subId = subIdFor(pageSlug, position);
+  const subId = product.subId;
 
   return (
     <article className="product">
@@ -101,12 +101,15 @@ export function ProductCard({
             <p className="cta-disabled">הקישור ייפתח כשחשבון השותפים יחובר</p>
           </>
         ) : (
+          /* Points at our own redirect, never straight at the marketplace:
+             a direct link is a click the marketplace counts and we never see. */
           <a
             className="cta"
-            href={product.promotionLink ?? product.detailUrl}
+            // Trailing slash matches the site's URL style, so the click goes
+            // straight to the redirect instead of paying for a 308 first.
+            href={`/go/${product.linkToken}/`}
             rel="nofollow sponsored noopener"
             target="_blank"
-            data-subid={subId}
           >
             לצפייה במרקטפלייס
           </a>

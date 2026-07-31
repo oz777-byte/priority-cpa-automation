@@ -1,4 +1,4 @@
-import { AdapterError } from './types';
+import { AdapterError } from './types.ts';
 
 /**
  * Minimal RFC 4180 CSV reader.

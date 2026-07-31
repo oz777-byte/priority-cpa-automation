@@ -1,5 +1,5 @@
-import type { CatalogProduct } from './normalize';
-import type { CategoryBrandPage } from './taxonomy';
+import type { CatalogProduct } from './normalize.ts';
+import type { CategoryBrandPage } from './taxonomy.ts';
 
 /**
  * SEO output for the storefront: page metadata, structured data, and sitemaps.

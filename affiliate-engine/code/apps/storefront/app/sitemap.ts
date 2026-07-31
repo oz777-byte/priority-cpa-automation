@@ -22,7 +22,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   if (isPreview) return staticPages;
 
-  const pages = await publishablePages();
+  const pages = publishablePages();
   const catalogPages: MetadataRoute.Sitemap = pages
     .filter((entry) => entry.products.length >= MIN_PRODUCTS_TO_INDEX)
     .map((entry) => ({

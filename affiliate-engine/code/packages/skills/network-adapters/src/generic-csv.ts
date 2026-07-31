@@ -1,6 +1,6 @@
 import { getNetworkProfile, resolveSubId } from '@affiliate/link-builder';
 import { toMinor } from '@affiliate/offer-schema';
-import { pick, toTable } from './csv';
+import { pick, toTable } from './csv.ts';
 import type {
   AdapterContext,
   ConversionStatus,
@@ -8,8 +8,8 @@ import type {
   NetworkAdapter,
   NormalizedConversion,
   RowError,
-} from './types';
-import { AdapterError } from './types';
+} from './types.ts';
+import { AdapterError } from './types.ts';
 
 /**
  * Column aliases seen across network exports. Networks rename columns without

@@ -1,6 +1,6 @@
 import { currencyExponent, formatMinor } from '@affiliate/offer-schema';
-import type { AssetMetrics } from './metrics';
-import { daysBetween } from './metrics';
+import type { AssetMetrics } from './metrics.ts';
+import { daysBetween } from './metrics.ts';
 
 /**
  * Turns metrics into a single recommended action per asset.

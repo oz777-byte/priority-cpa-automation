@@ -7,8 +7,8 @@ import {
   formatTimestamp,
   isRetryable,
   signRequest,
-} from '../src/index';
-import type { Transport } from '../src/index';
+} from '../src/index.ts';
+import type { Transport } from '../src/index.ts';
 
 const FIXED_NOW = () => 1_785_000_000_000;
 

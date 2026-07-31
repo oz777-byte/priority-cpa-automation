@@ -1,4 +1,4 @@
-import type { CatalogProduct } from './normalize';
+import type { CatalogProduct } from './normalize.ts';
 
 /**
  * Admission and ranking for the storefront.

@@ -4,8 +4,8 @@ export type {
   OfferInput,
   OfferStatus,
   ValidationIssue,
-} from './types';
-export { OfferValidationError } from './types';
+} from './types.ts';
+export { OfferValidationError } from './types.ts';
 
 export {
   assertMinor,
@@ -14,9 +14,9 @@ export {
   fromMinor,
   percentOfMinor,
   toMinor,
-} from './money';
+} from './money.ts';
 
-export { assertCanActivate, normalizeOffer } from './validate';
+export { assertCanActivate, normalizeOffer } from './validate.ts';
 
 export type {
   FitVerdict,
@@ -24,11 +24,11 @@ export type {
   OfferClassification,
   OfferFitCriteria,
   OfferFitResult,
-} from './fit';
+} from './fit.ts';
 export {
   DEFAULT_FIT_CRITERIA,
   VALIDATION_FIT_CRITERIA,
   classifyOffer,
   evaluateOfferFit,
   expectedCommissionMinor,
-} from './fit';
+} from './fit.ts';
