@@ -61,8 +61,11 @@ affiliate-engine/
 │   └── extraction_plan.md          איך חותכים לריפו נפרד
 │
 ├── 06_storefront/                  ★ OS Tech Ventures — החנות
+│   ├── setup_guide.md              ★ מה להקים, באיזה סדר, ומה להחזיר
 │   ├── storefront_spec.md          אפיון מלא: טקסונומיה, סינון, דירוג, SEO
 │   ├── api_integration.md          אינטגרציית AliExpress ומלכודותיה
+│   ├── redirect_service.md         שירות ה-redirect ורישום הקליקים
+│   ├── deployment.md               פריסה לדומיין
 │   └── prototype.html              אב-טיפוס ויזואלי (RTL)
 │
 └── code/
