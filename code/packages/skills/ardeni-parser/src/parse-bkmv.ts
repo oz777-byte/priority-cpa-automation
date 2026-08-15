@@ -1,7 +1,7 @@
 import iconv from 'iconv-lite';
 
 /**
- * Parser for the Israeli unified-format export (OF1.31 — "מבנה אחיד",
+ * Parser for the Israeli unified-format export (OF1.31 "open format",
  * file BKMVDATA.TXT). This is a Tax-Authority regulatory standard, so the
  * same parser handles exports from any compliant accounting software
  * (Ardeni, Hashavshevet, Rivhit, …) — record types are detected by their
@@ -34,6 +34,8 @@ export interface BkmvJournalLine {
 export interface BkmvAccount {
   accountKey: string;
   accountName: string;
+  /** Company/dealer id (positions 327-335); '' when absent or all zeros. */
+  taxId: string;
 }
 
 /** Company identity. Sourced from the A100 opening record / INI.TXT. */
@@ -84,6 +86,9 @@ const B100: Record<string, Field> = {
 const B110: Record<string, Field> = {
   accountKey: { start: 23, len: 15 },
   accountName: { start: 38, len: 50 },
+  // Verified against real Ardeni data (June 2026): e.g. account 170 carries
+  // its 9-digit company id at positions 327-335; zero-filled when absent.
+  taxId: { start: 327, len: 9 },
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -130,9 +135,12 @@ function parseB100(line: string): BkmvJournalLine {
 }
 
 function parseB110(line: string): BkmvAccount {
+  const rawTaxId = field(line, B110.taxId!);
+  const taxId = /^\d{8,9}$/.test(rawTaxId) && !/^0+$/.test(rawTaxId) ? rawTaxId : '';
   return {
     accountKey: field(line, B110.accountKey!),
     accountName: field(line, B110.accountName!),
+    taxId,
   };
 }
 

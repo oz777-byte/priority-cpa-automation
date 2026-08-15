@@ -252,29 +252,40 @@ export function JobDownload({
   jobId: string;
 }) {
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   async function download() {
     setBusy(true);
+    setError(null);
     try {
       const res = await fetch(
         `/api/ardeni?companyId=${companyId}&job=${jobId}`,
         { method: 'GET' },
       );
-      const data = (await res.json()) as { url?: string };
-      if (data.url) window.open(data.url, '_blank');
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !data.url) {
+        setError(data.error ?? 'ההורדה נכשלה — נסה לייצא מחדש');
+        return;
+      }
+      window.open(data.url, '_blank');
+    } catch {
+      setError('שגיאת רשת — נסה שוב');
     } finally {
       setBusy(false);
     }
   }
   return (
-    <button
-      type="button"
-      onClick={() => void download()}
-      disabled={busy}
-      className="text-sm text-accent-600 hover:underline inline-flex items-center gap-1 disabled:opacity-50"
-    >
-      {busy ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-      הורד
-    </button>
+    <span className="inline-flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => void download()}
+        disabled={busy}
+        className="text-sm text-accent-600 hover:underline inline-flex items-center gap-1 disabled:opacity-50"
+      >
+        {busy ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+        הורד
+      </button>
+      {error && <span className="text-[11px] text-red-600">{error}</span>}
+    </span>
   );
 }
 

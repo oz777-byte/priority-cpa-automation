@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import JSZip from 'jszip';
 import { convertBkmv, type ConversionReport } from '@priority-cpa/ardeni-parser';
-import { generateMoveInFlex } from '@priority-cpa/movein-generator';
+import {
+  pairEntries,
+  generateMoveInShort,
+  generateHeshin,
+} from '@priority-cpa/hashavshevet-generator';
 import { SupabaseAuditStore } from '@priority-cpa/audit-logger';
 import { requireUser } from '@/lib/auth';
 import { loadCompanyForUser } from '@/lib/company-context';
@@ -23,6 +27,8 @@ const ERRORS: Record<string, string> = {
   job_not_found: 'לא נמצאה משימת ייבוא',
   input_missing: 'קובץ המקור אינו זמין עוד — יש להעלות מחדש',
   output_missing: 'קובץ הפלט אינו זמין — יש לייצא מחדש',
+  upload_failed: 'שמירת הקובץ נכשלה — נסה שוב',
+  export_failed: 'יצירת קובץ הייצוא נכשלה — פנה לתמיכה עם מזהה המשימה',
 };
 
 function err(code: string, status: number): NextResponse {
@@ -32,16 +38,21 @@ function err(code: string, status: number): NextResponse {
 async function resolveCompany(request: NextRequest, userId: string, email: string) {
   const companyId = new URL(request.url).searchParams.get('companyId');
   if (!companyId) return { error: err('company_required', 400) } as const;
-  const company = await loadCompanyForUser(userId, email, companyId);
-  if (!company) return { error: err('company_forbidden', 403) } as const;
-  return { company } as const;
+  try {
+    const company = await loadCompanyForUser(userId, email, companyId);
+    return { company } as const;
+  } catch {
+    // loadCompanyForUser throws notFound() for unknown/forbidden companies —
+    // surface a proper JSON 403 instead of Next's HTML 404.
+    return { error: err('company_forbidden', 403) } as const;
+  }
 }
 
 function inputPath(companyId: string, jobId: string): string {
   return `${companyId}/${jobId}/BKMVDATA.TXT`;
 }
 function outputPath(companyId: string, jobId: string): string {
-  return `${companyId}/${jobId}/movein.zip`;
+  return `${companyId}/${jobId}/hashavshevet.zip`;
 }
 
 function reportText(report: ConversionReport): string {
@@ -49,7 +60,7 @@ function reportText(report: ConversionReport): string {
     .map(([c, n]) => `  ${c}: ${n} שורות`)
     .join('\n');
   const periods = report.periods.join(', ') || '—';
-  return `דוח המרה — מבנה אחיד (BKMV) → חשבשבת MOVEIN
+  return `דוח המרה — מבנה אחיד (BKMV) → חשבשבת
 
 תאריך הפקה: ${new Date().toISOString().slice(0, 10)}
 
@@ -58,12 +69,11 @@ function reportText(report: ConversionReport): string {
   חשבונות במקור (B110): ${report.sourceAccountCount}
   חשבונות שבשימוש בפועל: ${report.requiredAccountCount}
 
-פקודות יומן בפלט:
+פקודות יומן:
   סה"כ: ${report.jeCount}
   פקודה ממספר-תנועה יחיד: ${report.singleTransJeCount}
   פקודות ממוזגות (>1 מספר-תנועה): ${report.mergedJeCount}
   אצוות עם שורות לא-מאוזנות: ${report.unbalancedTrailerCount}
-  סה"כ שורות בקובץ: ${report.outputLineCount}
 
 איזון:
   סך חובה: ${report.drSum.toFixed(2)} ש"ח
@@ -74,32 +84,41 @@ function reportText(report: ConversionReport): string {
 מטבעות:
 ${currencies || '  —'}
 
-תקופות בקובץ (לפתוח בחשבשבת/פריוריטי): ${periods}
+תקופות בקובץ (לפתוח בחשבשבת): ${periods}
 
 אזהרות:
 ${report.warnings.length ? report.warnings.map((w) => `  • ${w}`).join('\n') : '  אין'}
 
-קידוד: Windows-1255 (CP1255), CR+LF. פורמט: FLEXIBLE (חשבשבת ענן / H-ERP).
+קבצים בחבילה:
+  movein.dat  — תנועות יומן (פורמט מקוצר, רשומות 88 תווים)
+  HESHIN.DAT  — כרטיסי חשבון (שם + ח.פ/עוסק כשקיים במקור)
+  HESHIN.PRM  — הגדרת מבנה כרטיסי החשבון
+
+קידוד: Windows-1255 (CP1255), CR+LF.
 `;
 }
 
-const INSTRUCTIONS = `הוראות העלאה לחשבשבת ענן
+const INSTRUCTIONS = `הוראות טעינה לחשבשבת
 
-1. פתחו את חשבשבת ענן והיכנסו לחברה הרלוונטית.
-2. תפריט: קליטת תנועות → ממשק גמיש.
-3. בחרו את שני הקבצים יחד: MOVEIN.DOC (התנועות) ו-MOVEIN.PRM (הגדרת העמודות).
-   חשבשבת קורא את ה-PRM כדי לפרש את ה-DOC — חובה להעלות את שניהם.
-4. אשרו קליטה. חשבשבת ידחוף את התנועות לפריוריטי לפי קונפיגורציית הלקוח הקיימת.
+חשוב — סדר הטעינה קובע:
+קודם כרטיסי חשבון (HESHIN), רק אחר כך תנועות (movein).
+טעינת תנועות לפני החשבונות תפתח כרטיסים ריקים עם שם ברירת מחדל.
 
-הערות:
-• ודאו שאתם בחברה הנכונה לפני הקליטה — ייבוא לחברה שגויה אינו הפיך בפריוריטי.
-• אם הדוח מציין תקופות שאינן פתוחות — פתחו אותן לפני הקליטה.
-• חשבונות חדשים שאינם קיימים ביעד — הקימו לפי "חשבונות שבשימוש בפועל" שבדוח.
+1. חלצו את שלושת הקבצים לתיקיית ה-rep של החברה בחשבשבת.
+   אין לפתוח את הקבצים בעורך טקסט — שמירה תהרוס את הקידוד.
+2. קליטת חשבונות: כללי -> ממשקים -> קליטת חשבונות מקובץ -> HESHIN.DAT.
+   ודאו שמספר החשבונות שנקלט תואם לדוח ההמרה.
+3. קליטת תנועות: כללי -> ממשקים -> קליטת תנועות יומן -> movein.dat.
+   הזינו מספר מנה ייחודי. אין צורך ב"פתיחת כרטיסים אוטומטית".
+4. בדקו את דוח הקליטה (חובה = זכות), ורק אז בצעו העברה מטבלת
+   הקליטה ליומן.
+
+אם הדוח מציין תקופות שאינן פתוחות — פתחו אותן לפני הקליטה.
 `;
 
 /* ======================================================================
  * POST (multipart, no ?job) — upload + parse + blocking preview.
- * POST (?job=<id>)          — generate MOVEIN, store, return zip.
+ * POST (?job=<id>)          — generate the Hashavshevet package, store, return zip.
  * ====================================================================== */
 export async function POST(request: NextRequest) {
   const me = await requireUser();
@@ -128,12 +147,7 @@ export async function POST(request: NextRequest) {
   const upload = await admin.storage
     .from(BUCKET)
     .upload(path, buffer, { contentType: 'text/plain', upsert: true });
-  if (upload.error) {
-    return NextResponse.json(
-      { error_code: 'upload_failed', error: 'שמירת הקובץ נכשלה' },
-      { status: 500 },
-    );
-  }
+  if (upload.error) return err('upload_failed', 500);
 
   const status = report.isOpeningValid ? 'parsed' : 'failed';
   const errorCode = !report.isOpeningValid
@@ -180,6 +194,22 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ jobId, report });
 }
 
+function zipResponse(body: Buffer, companyName: string, jobId: string): NextResponse {
+  const safeName = companyName.replace(/[^a-zA-Z0-9]/g, '_');
+  const bytes = body.buffer.slice(
+    body.byteOffset,
+    body.byteOffset + body.byteLength,
+  ) as ArrayBuffer;
+  return new NextResponse(bytes, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="hashavshevet-${safeName}-${jobId.slice(0, 8)}.zip"`,
+      'Content-Length': String(bytes.byteLength),
+    },
+  });
+}
+
 async function exportJob(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   admin: any,
@@ -189,56 +219,77 @@ async function exportJob(
 ): Promise<NextResponse> {
   const { data: job } = await admin
     .from('import_jobs')
-    .select('id, company_id, input_storage_path, balance_ok, status')
+    .select('id, company_id, input_storage_path, output_storage_path, balance_ok, status')
     .eq('id', jobId)
     .eq('company_id', company.id)
     .maybeSingle();
   if (!job) return err('job_not_found', 404);
   if (job.status === 'failed') return err('opening_not_a100', 400);
   if (!job.balance_ok) return err('imbalance', 400);
-  if (!job.input_storage_path) return err('input_missing', 400);
 
+  // Idempotent: a repeated export returns the stored package instead of
+  // creating anything new.
+  if (job.status === 'exported' && job.output_storage_path) {
+    const stored = await admin.storage.from(BUCKET).download(job.output_storage_path);
+    if (!stored.error && stored.data) {
+      return zipResponse(Buffer.from(await stored.data.arrayBuffer()), company.name, jobId);
+    }
+    // Stored output vanished — fall through and regenerate.
+  }
+
+  if (!job.input_storage_path) return err('input_missing', 400);
   const dl = await admin.storage.from(BUCKET).download(job.input_storage_path);
   if (dl.error || !dl.data) return err('input_missing', 400);
   const buffer = Buffer.from(await dl.data.arrayBuffer());
 
-  const { flexLines, report } = convertBkmv(buffer);
-  const { doc, prm } = generateMoveInFlex(flexLines);
+  const { entries, requiredAccounts, report } = convertBkmv(buffer);
+  const { records, unbalancedJeIndexes } = pairEntries(
+    entries.map((e) => ({
+      index: e.index,
+      documentDate: e.documentDate,
+      valueDate: e.valueDate,
+      details: e.details,
+      lines: e.lines.map((l) => ({
+        account: l.account,
+        side: l.side,
+        amountIls: l.amountIls,
+      })),
+    })),
+  );
+  if (records.length === 0) return err('export_failed', 500);
+
+  const movein = generateMoveInShort(records);
+  const heshin = generateHeshin(
+    requiredAccounts.map((a) => ({
+      accountKey: a.accountKey,
+      accountName: a.accountName,
+      ...(a.taxId ? { taxId: a.taxId } : {}),
+    })),
+  );
+
+  const fullReport =
+    reportText(report) +
+    (unbalancedJeIndexes.length
+      ? `\nפקודות שלא יוצאו (לא מאוזנות): ${unbalancedJeIndexes.join(', ')}\n`
+      : '');
 
   const zip = new JSZip();
-  zip.file('MOVEIN.DOC', doc);
-  zip.file('MOVEIN.PRM', prm);
-  zip.file('conversion-report.txt', reportText(report));
-  zip.file('הוראות-העלאה.txt', INSTRUCTIONS);
+  zip.file('movein.dat', movein);
+  zip.file('HESHIN.DAT', heshin.dat);
+  zip.file('HESHIN.PRM', heshin.prm);
+  zip.file('conversion-report.txt', fullReport);
+  zip.file('הוראות-טעינה.txt', INSTRUCTIONS);
   const zipBuf = await zip.generateAsync({ type: 'nodebuffer' });
 
   const outPath = outputPath(company.id, jobId);
-  await admin.storage
+  const outUpload = await admin.storage
     .from(BUCKET)
     .upload(outPath, zipBuf, { contentType: 'application/zip', upsert: true });
-
-  // Optional FK: surface the import alongside other MOVEIN exports.
-  const batchNumber = String(Date.now()).slice(-6);
-  const { data: batchRow } = await admin
-    .from('movein_batches')
-    .insert({
-      company_id: company.id,
-      batch_number: batchNumber,
-      scenario_breakdown: { source: 'ardeni', je_count: report.jeCount },
-      exported_at: new Date().toISOString(),
-      exported_by: me.id,
-      priority_load_status: 'pending',
-    })
-    .select('id')
-    .single();
+  if (outUpload.error) return err('upload_failed', 500);
 
   await admin
     .from('import_jobs')
-    .update({
-      status: 'exported',
-      output_storage_path: outPath,
-      movein_batch_id: batchRow?.id ?? null,
-    })
+    .update({ status: 'exported', output_storage_path: outPath })
     .eq('id', jobId);
 
   const audit = new SupabaseAuditStore(admin);
@@ -248,22 +299,16 @@ async function exportJob(
     action: 'ardeni.import.export',
     entityType: 'import_job',
     entityId: jobId,
-    payload: { je_count: report.jeCount, batch_number: batchNumber },
-  });
-
-  const safeName = company.name.replace(/[^a-zA-Z0-9]/g, '_');
-  const body = zipBuf.buffer.slice(
-    zipBuf.byteOffset,
-    zipBuf.byteOffset + zipBuf.byteLength,
-  ) as ArrayBuffer;
-  return new NextResponse(body, {
-    status: 200,
-    headers: {
-      'Content-Type': 'application/zip',
-      'Content-Disposition': `attachment; filename="movein-${safeName}-${batchNumber}.zip"`,
-      'Content-Length': String(body.byteLength),
+    payload: {
+      je_count: report.jeCount,
+      record_count: records.length,
+      account_count: requiredAccounts.length,
+      unbalanced_je_count: unbalancedJeIndexes.length,
+      format: 'hashavshevet-short-88',
     },
   });
+
+  return zipResponse(zipBuf, company.name, jobId);
 }
 
 /* ======================================================================

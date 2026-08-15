@@ -13,7 +13,12 @@ import type { BkmvJournalLine } from './parse-bkmv.js';
  *      then emit one JE.
  */
 
-const BALANCE_TOLERANCE = 0.005;
+// All accumulation is done in integer agorot (cents): a JE closes when the
+// running debit and credit cent totals are exactly equal. Float drift can
+// therefore never split or merge a grouping.
+function toCents(v: number): number {
+  return Math.round(v * 100);
+}
 
 export interface JeGroupLine {
   account: string;
@@ -136,8 +141,8 @@ export function groupToJournalEntries(
     const groupLines: JeGroupLine[] = lines.map((l) => {
       const norm = normalizeLine(l, '');
       currencyCounts[norm.currency] = (currencyCounts[norm.currency] ?? 0) + 1;
-      if (norm.side === 'D') drSum += norm.amountIls;
-      else crSum += norm.amountIls;
+      if (norm.side === 'D') drSum += toCents(norm.amountIls);
+      else crSum += toCents(norm.amountIls);
 
       const accountDisplay = accountNames.get(l.account) ?? '';
       const lineDetails = detailsBase
@@ -171,11 +176,11 @@ export function groupToJournalEntries(
 
     for (const r of batchLines) {
       acc.push(r);
-      const absAmount = Math.abs(r.amount);
-      if (effectiveDebit(r)) accDr += absAmount;
-      else accCr += absAmount;
+      const absCents = Math.abs(toCents(r.amount));
+      if (effectiveDebit(r)) accDr += absCents;
+      else accCr += absCents;
 
-      if (Math.abs(accDr - accCr) < BALANCE_TOLERANCE && accDr > BALANCE_TOLERANCE) {
+      if (accDr === accCr && accDr > 0) {
         flush(acc, true);
         acc = [];
         accDr = 0;
@@ -187,7 +192,7 @@ export function groupToJournalEntries(
       unbalancedTrailerCount += 1;
       warnings.push(
         `batch ${batchNum}: ${acc.length} unbalanced trailing lines ` +
-          `(DR=${accDr.toFixed(2)}, CR=${accCr.toFixed(2)}) — manual review`,
+          `(DR=${(accDr / 100).toFixed(2)}, CR=${(accCr / 100).toFixed(2)}) — manual review`,
       );
       flush(acc, false);
     }
@@ -201,9 +206,9 @@ export function groupToJournalEntries(
       singleTransJeCount,
       mergedJeCount,
       unbalancedTrailerCount,
-      drSum,
-      crSum,
-      netImbalance: drSum - crSum,
+      drSum: drSum / 100,
+      crSum: crSum / 100,
+      netImbalance: (drSum - crSum) / 100,
       currencyCounts,
       periods: Array.from(periods).sort(),
     },

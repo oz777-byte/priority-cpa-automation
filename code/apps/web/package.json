@@ -15,6 +15,7 @@
     "@priority-cpa/audit-logger": "*",
     "@priority-cpa/boi-rates": "*",
     "@priority-cpa/db": "*",
+    "@priority-cpa/hashavshevet-generator": "*",
     "@priority-cpa/invoice-schema": "*",
     "@priority-cpa/israeli-vat-logic": "*",
     "@priority-cpa/je-constructor": "*",

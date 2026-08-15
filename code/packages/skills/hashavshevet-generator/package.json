@@ -1,0 +1,23 @@
+{
+  "name": "@priority-cpa/hashavshevet-generator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Generates the Hashavshevet import package (movein.dat 88-char short format + HESHIN.DAT/PRM account cards, CP1255, CR+LF) — the format validated against real Rivhit-produced files that Hashavshevet loaded successfully.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "iconv-lite": "^0.6.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2"
+  }
+}

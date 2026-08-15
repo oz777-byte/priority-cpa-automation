@@ -1,6 +1,6 @@
 import type { FlexibleLineInput } from '@priority-cpa/movein-generator';
 import { parseBkmv, type ParsedBkmv, type BkmvAccount } from './parse-bkmv.js';
-import { groupToJournalEntries } from './group-to-jes.js';
+import { groupToJournalEntries, type JournalEntry } from './group-to-jes.js';
 import { toFlexLines, requiredAccounts } from './to-flex-lines.js';
 
 /** Net debit/credit gap above which export is forbidden. */
@@ -32,6 +32,8 @@ export interface ConversionReport {
 
 export interface ConversionResult {
   flexLines: FlexibleLineInput[];
+  /** Balanced journal entries — input for downstream target-format generators. */
+  entries: JournalEntry[];
   requiredAccounts: BkmvAccount[];
   parsed: ParsedBkmv;
   report: ConversionReport;
@@ -75,5 +77,5 @@ export function convertBkmv(input: Buffer | string): ConversionResult {
     warnings: grouped.warnings,
   };
 
-  return { flexLines, requiredAccounts: reqAccounts, parsed, report };
+  return { flexLines, entries: grouped.entries, requiredAccounts: reqAccounts, parsed, report };
 }

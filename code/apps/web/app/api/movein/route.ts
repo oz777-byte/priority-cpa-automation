@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'node:crypto';
 import JSZip from 'jszip';
 import { SupabaseAuditStore } from '@priority-cpa/audit-logger';
 import {
@@ -384,7 +385,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const batchNumber = String(Date.now()).slice(-6);
+  // Millisecond timestamp alone can collide on concurrent exports — append a
+  // random suffix so the batch number is actually unique.
+  const batchNumber = `${String(Date.now()).slice(-6)}-${randomUUID().slice(0, 4)}`;
   const file = await buildMoveInFileAsync(validJEs, company.name, batchNumber);
   if (!file) {
     return NextResponse.json({ error: 'failed_to_build_file' }, { status: 500 });
