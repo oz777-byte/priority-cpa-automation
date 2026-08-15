@@ -3,7 +3,6 @@ import type {
   AssetConstructResult,
   AssetDepreciationInput,
   AssetJELine,
-  AssetJERecord,
   AssetPurchaseInput,
   AssetSaleInput,
 } from './asset-types.js';

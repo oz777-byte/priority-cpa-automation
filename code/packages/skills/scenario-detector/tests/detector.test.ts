@@ -111,7 +111,7 @@ describe('detectScenario — overlays', () => {
 describe('detectScenario — allocation threshold edge cases', () => {
   it('not MISSING_ALLOCATION below threshold', () => {
     expect(
-      detectScenario(inv(), { subtotal: 5000 }).scenario,
+      detectScenario(inv({}, { subtotal: 5000 })).scenario,
     ).not.toBe('MISSING_ALLOCATION');
   });
 
