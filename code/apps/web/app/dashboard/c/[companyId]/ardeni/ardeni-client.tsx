@@ -173,6 +173,9 @@ export function ArdeniClient({ companyId }: Props) {
 
           {/* Metrics */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {report.company.taxId && (
+              <Metric label="ח.פ בקובץ המקור" value={report.company.taxId} />
+            )}
             <Metric label="פקודות יומן" value={report.jeCount} />
             <Metric label="שורות מקור (B100)" value={report.sourceLineCount} />
             <Metric

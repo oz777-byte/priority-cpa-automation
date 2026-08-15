@@ -40,7 +40,9 @@ export interface BkmvAccount {
 
 /** Company identity. Sourced from the A100 opening record / INI.TXT. */
 export interface BkmvCompany {
+  /** 9-digit VAT/company id from A100; '' when the record is absent/invalid. */
   taxId: string;
+  /** Company display name lives only in INI.TXT (A000) — '' from BKMVDATA. */
   name: string;
 }
 
@@ -134,6 +136,23 @@ function parseB100(line: string): BkmvJournalLine {
   };
 }
 
+/**
+ * A100 opening record, per the OF1.31 standard:
+ *   code(4) + record counter(9) + VAT id(9) + primary id(15) +
+ *   system constant '&OF1.31&'(8) + reserved(50) = 95 chars.
+ * The real Ardeni A100 record measured exactly 95 chars, corroborating this
+ * layout. The system-constant check guards against a misaligned variant —
+ * on mismatch we return '' rather than a possibly-wrong id.
+ */
+const A100_SYSTEM_CONSTANT = '&OF1.31&';
+
+function parseA100TaxId(line: string): string {
+  const sysConst = line.substring(37, 45);
+  if (sysConst !== A100_SYSTEM_CONSTANT) return '';
+  const taxId = line.substring(13, 22).trim();
+  return /^\d{9}$/.test(taxId) && !/^0+$/.test(taxId) ? taxId : '';
+}
+
 function parseB110(line: string): BkmvAccount {
   const rawTaxId = field(line, B110.taxId!);
   const taxId = /^\d{8,9}$/.test(rawTaxId) && !/^0+$/.test(rawTaxId) ? rawTaxId : '';
@@ -150,9 +169,8 @@ function parseB110(line: string): BkmvAccount {
  * Parse a raw BKMVDATA.TXT buffer (or already-decoded string) into the
  * canonical structure consumed by the MOVEIN converter.
  *
- * NOTE: company.taxId / company.name are not yet extracted from A100 — the
- * authoritative A100 offsets are pending verification against a sample file.
- * They are currently sourced alongside from INI.TXT by the caller.
+ * NOTE: company.taxId comes from the A100 opening record; company.name only
+ * exists in the companion INI.TXT (A000) and stays '' here.
  */
 export function parseBkmv(input: Buffer | string): ParsedBkmv {
   const text = typeof input === 'string' ? input : iconv.decode(input, ENCODING);
@@ -161,6 +179,7 @@ export function parseBkmv(input: Buffer | string): ParsedBkmv {
   const jeLines: BkmvJournalLine[] = [];
   const accounts: BkmvAccount[] = [];
   let openingRecordType = '';
+  let companyTaxId = '';
 
   for (const raw of lines) {
     if (raw.length < 4) continue;
@@ -172,6 +191,8 @@ export function parseBkmv(input: Buffer | string): ParsedBkmv {
       jeLines.push(parseB100(raw));
     } else if (type === 'B110') {
       accounts.push(parseB110(raw));
+    } else if (type === 'A100' && companyTaxId === '') {
+      companyTaxId = parseA100TaxId(raw);
     }
   }
 
@@ -183,7 +204,7 @@ export function parseBkmv(input: Buffer | string): ParsedBkmv {
   }
 
   return {
-    company: { taxId: '', name: '' },
+    company: { taxId: companyTaxId, name: '' },
     accounts,
     jeLines,
     stats: {

@@ -58,10 +58,17 @@ function b110(accountKey: string, accountName: string): string {
   return buf.join('');
 }
 
-function a100(): string {
-  const buf = Array(RECORD_LEN).fill(' ');
-  place(buf, 1, 'A100');
-  return buf.join('');
+function a100(taxId = '514013937'): string {
+  // OF1.31 layout: code(4) + counter(9) + vat id(9) + primary id(15) +
+  // system constant(8) + reserved(50) = 95 chars.
+  return (
+    'A100' +
+    '000000001' +
+    taxId.padStart(9, '0') +
+    '746791864627410' +
+    '&OF1.31&' +
+    ' '.repeat(50)
+  );
 }
 
 function buildFile(): Buffer {
@@ -117,6 +124,16 @@ describe('parseBkmv', () => {
 
   it('detects the opening record type for the A100 guard', () => {
     expect(result.openingRecordType).toBe('A100');
+  });
+
+  it('extracts the company tax id from A100', () => {
+    expect(result.company.taxId).toBe('514013937');
+  });
+
+  it('returns empty tax id when the A100 system constant is misaligned', () => {
+    const bad = a100().replace('&OF1.31&', '&OF9.99&');
+    const r = parseBkmv(iconv.encode(bad + '\r\n', 'cp1255'));
+    expect(r.company.taxId).toBe('');
   });
 
   it('parses every B100 journal line', () => {
