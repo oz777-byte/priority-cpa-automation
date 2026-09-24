@@ -73,7 +73,8 @@
       "Bash(file \"C:/Users/yaelc/Downloads/INI.TXT\" && stat -c \"%s bytes\" \"C:/Users/yaelc/Downloads/INI.TXT\")",
       "Bash(grep -nA2 \"A000\" \"C:/Users/yaelc/Downloads/horaot_131.txt\")",
       "PowerShell(& \"C:\\\\Users\\\\yaelc\\\\Downloads\\\\verify-balance.ps1\")",
-      "Bash(git -C \"C:/Users/yaelc/OneDrive - ע.ש. אחזקת מבנים בע מ, ח.פ. 516136819/מסמכים/עובדים/Os-Tech-Ventures/priority-cpa-automation-spec\" show --stat ed8a403 3769e8d)"
+      "Bash(git -C \"C:/Users/yaelc/OneDrive - ע.ש. אחזקת מבנים בע מ, ח.פ. 516136819/מסמכים/עובדים/Os-Tech-Ventures/priority-cpa-automation-spec\" show --stat ed8a403 3769e8d)",
+      "mcp__Claude_Code_Remote__read_documentation"
     ]
   }
 }
